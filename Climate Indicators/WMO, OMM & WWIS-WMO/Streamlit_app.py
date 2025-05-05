@@ -1,5 +1,6 @@
 import pandas as pd
 import folium
+import json
 import requests
 import streamlit as st
 from streamlit_folium import st_folium
@@ -51,37 +52,91 @@ def fetch_all_weather(df):
 
 weather_dict = fetch_all_weather(df_matched)
 
-# --- Step 4: Build and display Folium map ---
-m = folium.Map(location=[-38.4161, -63.6167], zoom_start=4)
+# --- Step 4: Load GeoJSON map ---
+with open("ar.json", "r", encoding="utf-8") as f:
+    city_geojson = json.load(f)
 
-for _, row in df_matched.iterrows():
-    city = row['City']
-    data = weather_dict.get(city, {})
-    if 'weather' in data:
-        today = data['weather']['dailyForecast'][0]
-        popup_html = f"""
-        <b>{city}</b><br>
-        <b>Today:</b> {today['weather']}<br>
-        <b>Min:</b> {today['minTemp']}°C<br>
-        <b>Max:</b> {today['maxTemp']}°C
-        """
+# Extract city names from GeoJSON
+geojson_city_names = [feature['properties']['name'] for feature in city_geojson['features']]
+
+# Dummy volume data (if needed)
+df_cities = pd.DataFrame({
+    'city': geojson_city_names,
+    'volumen': list(range(10, 10 + len(geojson_city_names)))
+})
+
+# Create base map
+city_map = folium.Map(location=[-38.4161, -63.6167], zoom_start=3)
+
+# Add GeoJson layer with click event tracking
+def on_click_js(city_name):
+    return f"""
+    function(feature, layer) {{
+        layer.on({{
+            click: function(e) {{
+                var data = {{
+                    clicked_city: "{city_name}"
+                }};
+                window.parent.postMessage({{ type: 'folium_click', data: data }}, "*");
+            }}
+        }});
+    }}
+    """
+
+# Apply the click handler to each city in GeoJSON
+for feature in city_geojson["features"]:
+    city_name = feature["properties"]["name"]
+    gj = folium.GeoJson(
+        data=feature,
+        name=city_name,
+        style_function=lambda f: {
+            'fillColor': '#9d9bc9',
+            'color': 'white',
+            'weight': 1,
+            'dashArray': '5, 5',
+            'fillOpacity': 0.7
+        },
+        highlight_function=lambda f: {
+            'fillColor': '#003366',
+            'color': 'white',
+            'weight': 2,
+            'fillOpacity': 0.9
+        },
+        tooltip=folium.GeoJsonTooltip(
+            fields=['name'],
+            aliases=['Ciudad:'],
+            style=(
+                "background-color: white; color: black; font-weight: bold; "
+                "padding: 4px; border-radius: 4px;"
+            ),
+            highlight_style=(
+                "background-color: #003366; color: white; font-weight: bold; "
+                "padding: 4px; border-radius: 4px;"
+            )
+        )
+    )
+    gj.add_child(folium.features.GeoJsonPopup(fields=["name"]))
+    gj.add_to(city_map)
+
+# Render map and track interaction
+map_data = st_folium(city_map, width=700, height=500)
+
+# --- Step 5: Detect clicked city from GeoJSON (postMessage fallback used by streamlit-folium) ---
+clicked_city = None
+if map_data and "last_active_drawing" in map_data and map_data["last_active_drawing"]:
+    clicked_city = map_data["last_active_drawing"].get("properties", {}).get("name")
+
+# Dropdown update logic
+if clicked_city:
+    if clicked_city in city_list:
+        selected_city = st.selectbox("Select a city to view full weather data:", city_list, index=city_list.index(clicked_city))
     else:
-        popup_html = f"Weather unavailable: {data.get('error', 'Unknown error')}"
+        st.warning(f"No data available for the clicked city: {clicked_city}")
+        selected_city = st.selectbox("Select a city to view full weather data:", city_list)
+else:
+    selected_city = st.selectbox("Select a city to view full weather data:", city_list)
 
-    folium.Marker(
-        location=[row['lat'], row['lon']],
-        popup=popup_html,
-        tooltip=city,
-        icon=folium.Icon(color='blue', icon='info-sign')
-    ).add_to(m)
-
-st.title("Argentina City Weather Map")
-
-st_folium(m, width=500, height=300)
-
-# --- Step 5: Dropdown to show detailed weather info ---
-selected_city = st.selectbox("Select a city to view full weather data:", city_list)
-
+# Fetch the weather data for the selected city
 def get_city_weather_df(city_name):
     entry = weather_dict.get(city_name, None)
     if entry and 'city' in entry:
@@ -92,19 +147,7 @@ def get_city_weather_df(city_name):
 df = get_city_weather_df(selected_city)
 
 if df.empty:
-    st.warning(f"No weather data available for {selected_city}.")
-
-import pandas as pd
-from pandas import json_normalize
-
-mem_cols = ['city.lang', 'city.cityName', 'city.cityLatitude', 'city.cityLongitude',
-    'city.cityId', 'city.isCapital', 'city.stationName', 'city.tourismURL',
-    'city.tourismBoardName', 'city.isDep', 'city.timeZone', 'city.isDST',
-    'city.member.memId', 'city.member.memName', 'city.member.shortMemName',
-    'city.member.url', 'city.member.orgName', 'city.member.logo',
-    'city.member.ra']
-
-city_member = df[mem_cols]
+    st.warning(f"Data is fetched and displayed below")
 
 import pandas as pd
 from pandas import json_normalize
