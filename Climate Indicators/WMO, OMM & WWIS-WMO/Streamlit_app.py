@@ -34,7 +34,7 @@ df_matched['lat'] = df_matched['City'].map(lambda x: coords[x][0])
 df_matched['lon'] = df_matched['City'].map(lambda x: coords[x][1])
 
 # --- Step 3: Fetch weather and store ---
-@st.cache_data
+@st.cache_data(ttl=600)
 def fetch_all_weather(df):
     weather_data = {}
     for _, row in df.iterrows():
@@ -221,7 +221,15 @@ icon_map = {
     'Sunny': '☀️',
     'Cloudy': '☁️',
     'Rain': '🌧️',
-    'Thunderstorm': '⛈️'
+    'Thunderstorms': '⛈️',
+    'Thundershowers': '⛈️',
+    'Sleet': '🌧️❄️',
+    'Snow': '❄️',
+    'Light Rain': '🌦️',
+    'Sunny Periods': '🌥️',
+    'Fine': '🌞',
+    'Mist': '🌫️',
+    'Storm': '⛈️'
 }
 
 city_forecast['Icon'] = city_forecast['weather'].map(icon_map).fillna('🌈')  
