@@ -278,9 +278,9 @@ with tabs[0]:
             st.pyplot(plt.gcf())
 
             st.markdown('<p class="forecast-summary-header">📉 Forecast (Next 3 Months)</p>', unsafe_allow_html=True)
-            city_climate.index = pd.period_range(start='2025-01', periods=12, freq='M')
+            city_climate.index = pd.period_range(start='01', periods=12, freq='M')
             forecast_periods = 3
-            future_months = pd.period_range(start='2026-01', periods=forecast_periods, freq='M').strftime('%b')
+            future_months = pd.period_range(start='01', periods=forecast_periods, freq='M').strftime('%b')
 
             def forecast_series(series, periods=3):
                 model = auto_arima(series, seasonal=False)
