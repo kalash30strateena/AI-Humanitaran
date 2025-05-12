@@ -43,10 +43,10 @@ st.markdown("""
 }}
 .custom-header .header-links a {{
     color: #7a2e2b;
-    margin-left: 30px;
+    margin-left: 10px;
     font-size: 16px;
     text-decoration: none;
-    padding: 8px 18px;
+    padding: 8px 8px;
     border-radius: 18px;
     transition: background 0.2s, color 0.2s;
 }}
