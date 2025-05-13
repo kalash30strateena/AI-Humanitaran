@@ -8,63 +8,17 @@ import matplotlib.pyplot as plt
 from pmdarima import auto_arima
 from pandas import json_normalize
 import plotly.graph_objects as go
+from components.header import show_header
 
+# 1. Set page config FIRST for consistent layout
 st.set_page_config(layout="wide")
 
-# --- Custom CSS and Header HTML ---
-if "language" not in st.session_state:
-    st.session_state["language"] = "English"
+# 2. Show the constant header
+show_header()
 
+# 3. (Optional) Page-specific CSS (keep only if not already in header.py)
 st.markdown("""
 <style>
-/* Header styling */
-.custom-header {{
-    background-color: #ffffff;
-    font-size: 20.5px;
-    padding: 0px 0px;
-    border-bottom: 2px solid #eaeaea;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0px;
-}}
-.custom-header img {{
-    height: 100px;
-}}
-.custom-header .header-center {{
-    flex: 1;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}}
-.custom-header .header-links {{
-    display: flex;
-    align-items: center;
-}}
-.custom-header .header-links a {{
-    color: #7a2e2b;
-    margin-left: 10px;
-    font-size: 16px;
-    text-decoration: none;
-    padding: 8px 8px;
-    border-radius: 18px;
-    transition: background 0.2s, color 0.2s;
-}}
-.custom-header .header-links a:hover {{
-    background-color: #b22222;
-    color: #fff !important;
-    border-radius: 18px;
-    text-decoration: none;
-}}
-.language-select {{
-    margin-right: 30px;
-    font-size: 16px;
-    padding: 4px 8px;
-    border-radius: 4px;
-    border: 1px solid #ccc;
-    color: #7a2e2b;
-    background-color: #f9f9f9;
-}}
 .stTabs [data-baseweb="tab"] {{
     margin-right: 7px !important;
 }}
@@ -123,28 +77,7 @@ st.markdown("""
     color: #0a0a0a; 
 }}
 </style>
-
-<div class="custom-header">
-    <div>
-        <img src="https://cruzroja.org.ar/observatorio-humanitario/wp-content/uploads/2020/09/logos-cra-mr-2023.png" alt="Logo" width="400">
-    </div>
-    <div class="header-center"></div>
-    <div class="header-links">
-        <form action="" method="get" id="lang-form">
-            <select name="language" class="language-select" onchange="document.getElementById('lang-form').submit();">
-                <option value="English" {eng_selected}>English</option>
-                <option value="Español" {esp_selected}>Español</option>
-            </select>
-        </form>
-        <a href="/Login" target="_self">Login</a>
-        <a href="/Signup" target="_self">Signup</a>
-    </div>
-</div>
-""".format(
-    eng_selected="selected" if st.session_state.get("language", "English") == "English" else "",
-    esp_selected="selected" if st.session_state.get("language", "English") == "Español" else "",
-), unsafe_allow_html=True)
-
+""", unsafe_allow_html=True)
 
 st.markdown('<div class="main-content">', unsafe_allow_html=True)
 st.markdown("<h1 style='text-align: center'>ARGENTINA</h1>", unsafe_allow_html=True)
@@ -379,7 +312,6 @@ with tabs[0]:
                 icon_html = f'<img src="{row["weatherIcon"]}" width="38">'
             else:
                 icon_html = "*"
-
             day_name = row['forecastDate'].strftime('%a').upper()
             date_str = row['forecastDate'].strftime('%d %b')
             with cols[i]:

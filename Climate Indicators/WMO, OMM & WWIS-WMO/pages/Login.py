@@ -1,6 +1,7 @@
 import streamlit as st
-
-st.set_page_config(page_title="Login", layout="centered")
+st.set_page_config(layout="wide")
+from components.header import show_header
+show_header()
 
 st.markdown("<h2 style='text-align: center;'>Login</h2>", unsafe_allow_html=True)
 
