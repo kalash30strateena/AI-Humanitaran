@@ -515,156 +515,15 @@ with tabs[3]:
     
     with SE_tabs[0]:
         st.write('Age dashboard')
+        st.image('images/Vulnerability Indicators/Age/AgeF.png', use_container_width=True)
         
     with SE_tabs[1]:
         st.write('Gender Dashboard')
-        # Fetch the data.
-        df = pd.read_csv("https://ourworldindata.org/grapher/sex-ratio-by-age.csv?v=1&csvType=full&useColumnShortNames=true", storage_options = {'User-Agent': 'Our World In Data data fetch/1.0'})
-        df=df[df['Entity'] == 'Argentina']
-        df.columns = df.columns.str.strip()  # Remove leading/trailing spaces
-
-        column_renames = {
-            'sex_ratio__sex_all__age_100plus__variant_estimates':'100+ years olds',	
-            'sex_ratio__sex_all__age_15__variant_estimates':'15 year olds',
-            'sex_ratio__sex_all__age_20__variant_estimates':'20 year olds',
-            'sex_ratio__sex_all__age_30__variant_estimates':'30 year olds',
-            'sex_ratio__sex_all__age_40__variant_estimates':'40 year olds',
-            'sex_ratio__sex_all__age_50__variant_estimates':'50 year olds',	
-            'sex_ratio__sex_all__age_60__variant_estimates':'60 year olds',	
-            'sex_ratio__sex_all__age_70__variant_estimates':'70 year olds',
-            'sex_ratio__sex_all__age_80__variant_estimates':'80 year olds',	
-            'sex_ratio__sex_all__age_90__variant_estimates':'90 year olds',	
-            'sex_ratio__sex_all__age_0__variant_estimates':'Birth',	
-            'sex_ratio__sex_all__age_5__variant_estimates':'5 year olds'
-        }
-        df.rename(columns=column_renames, inplace=True)
-        df['Year']=pd.to_datetime(df['Year'], format='%Y')
-        df.sort_values('Year', inplace=True)
-        df.set_index('Year', inplace=True)
-        df.drop(columns=['Entity','Code'], inplace=True)
-        df = df.fillna(df.mean())
-        n_periods = 5
-        last_year = df.index[-1]
-        future_years = pd.date_range(start=last_year + pd.DateOffset(years=1), periods=n_periods, freq='YS')
-        forecast_df = pd.DataFrame(index=future_years)
-        for col in df.columns:
-            series = df[col]
-            model = auto_arima(series, seasonal=False, stepwise=True, suppress_warnings=True)
-            forecast = model.predict(n_periods=n_periods)
-            forecast_df[col] = forecast
-        plt.figure(figsize=(10, 5))
-        colors = plt.cm.tab10.colors  # Up to 10 distinct colors
-
-        for i, col in enumerate(df.columns):
-            plt.plot(df.index, df[col], label=f'{col} - Actual', color=colors[i % 10])
-            plt.plot(forecast_df.index, forecast_df[col], label=f'{col} - Forecast', linestyle='--', color=colors[i % 10])
-
-        plt.title('Gender ratio Forecast for Next 5 Years (All Age Groups)')
-        plt.xlabel('Year')
-        plt.ylabel('Ratio')
-        plt.legend(loc='upper left', bbox_to_anchor=(1.02, 1.0))  # Move legend outside plot
-        st.pyplot(plt.gcf())
+        st.image('images/Vulnerability Indicators/Gender/SexRatioByAge.png', use_container_width=True)
         
     with SE_tabs[2]:
         st.write('Health Dashboard')
-        
-        df = pd.read_csv("https://ourworldindata.org/grapher/life-expectancy-at-different-ages.csv?v=1&csvType=full&useColumnShortNames=true", storage_options = {'User-Agent': 'Our World In Data data fetch/1.0'})
-        df=df[df['Entity'] == 'Argentina']
-        df.columns = df.columns.str.strip()  # Remove leading/trailing spaces
-        column_renames = {
-            'life_expectancy_0__sex_total__age_0':'at birth',	
-            'life_expectancy__sex_total__age_10':'10 year old',
-            'life_expectancy__sex_total__age_25':'25 year old',
-            'life_expectancy__sex_total__age_45':'45 year old',	
-            'life_expectancy__sex_total__age_65':'65 year old',
-            'life_expectancy__sex_total__age_80':'80 year old'
-        }
-        df.rename(columns=column_renames, inplace=True)
-        df['Year']=pd.to_datetime(df['Year'], format='%Y')
-        df.sort_values('Year', inplace=True)
-        df = df.loc[(df['Year'] >= '1950-01-01')]
-        df.set_index('Year', inplace=True)
-        df.drop(columns=['Entity','Code'], inplace=True)
-        n_periods = 5
-        last_year = df.index[-1]
-
-        future_years = pd.date_range(start=last_year + pd.DateOffset(years=1), periods=n_periods, freq='YS')
-        forecast_df = pd.DataFrame(index=future_years)
-        
-        for col in df.columns:
-            series = df[col]
-            model = auto_arima(series, seasonal=False, stepwise=True, suppress_warnings=True)
-            forecast = model.predict(n_periods=n_periods)
-            forecast_df[col] = forecast
-            
-        plt.figure(figsize=(10, 5))
-        colors = plt.cm.tab10.colors  # Up to 10 distinct colors
-
-        for i, col in enumerate(df.columns):
-            plt.plot(df.index, df[col], label=f'{col} - Actual', color=colors[i % 10])
-            plt.plot(forecast_df.index, forecast_df[col], label=f'{col} - Forecast', linestyle='--', color=colors[i % 10])
-
-        plt.title('Life expectancy (All Age Groups)')
-        plt.xlabel('Year')
-        plt.ylabel('Life Expectancy(years)')
-        plt.legend(loc='upper left', bbox_to_anchor=(1.02, 1.0))  # Move legend outside plot
-        st.pyplot(plt.gcf())
-        
-        
-        # 2nd plotting graph
-        df = pd.read_csv("https://ourworldindata.org/grapher/population-by-age-group-with-projections.csv?v=1&csvType=full&useColumnShortNames=true", storage_options = {'User-Agent': 'Our World In Data data fetch/1.0'}) 
-        df=df[df['Entity'] == 'Argentina']
-        df.drop(columns=['population__sex_all__age_all__variant_medium','population__sex_all__age_65plus__variant_medium','population__sex_all__age_25_64__variant_medium','population__sex_all__age_0_24__variant_medium','population__sex_all__age_0_14__variant_medium','population__sex_all__age_0_4__variant_medium','Entity','Code'], inplace=True)
-        df.columns = df.columns.str.strip()  
-
-        column_renames = {
-            'population__sex_all__age_all__variant_estimates':'Population-Total',
-            'population__sex_all__age_65plus__variant_estimates':'Population-Age:65+',
-            'population__sex_all__age_25_64__variant_estimates':'Population-Age:25-64',
-            'population__sex_all__age_0_24__variant_estimates':'Population-Age:0-24',
-            'population__sex_all__age_0_14__variant_estimates':'Population-Age:0-14',
-            'population__sex_all__age_0_4__variant_estimates':'Population-Age:0-4'
-        }
-        df.rename(columns=column_renames, inplace=True)
-        current_year = datetime.now().year
-        df['Year']=pd.to_datetime(df['Year'], format='%Y').dt.year
-        df.sort_values('Year', inplace=True)
-        df = df.loc[df['Year'] <= current_year]
-        value_columns = df.columns.difference(['Year'])  # All columns except 'Year'
-        df = df.dropna(subset=value_columns, how='all')
-        df[value_columns] = df[value_columns].apply(lambda col: col.fillna(col.mean()))
-        df.set_index('Year', inplace=True)
-        df.index = pd.to_datetime(df.index.astype(str), format='%Y')
-        df = df.asfreq('YS')
-        df= df / 1_000_000
-        n_periods = 5
-        last_year = df.index[-1]
-        future_years = pd.date_range(start=last_year + DateOffset(years=1), periods=n_periods, freq='YS')
-        forecast_df = pd.DataFrame(index=future_years)
-        for col in df.columns:
-            series = df[col]
-            try:
-                model = auto_arima(series, seasonal=False, stepwise=True, suppress_warnings=False)
-                forecast = model.predict(n_periods=n_periods)
-                forecast_df[col] = forecast
-            except Exception as e:
-                print(f"Error for {col}: {e}")
-        plt.figure(figsize=(10, 5))
-        colors = plt.cm.tab10.colors  # Up to 10 distinct colors
-
-        for i, col in enumerate(df.columns):
-            plt.plot(df.index, df[col], label=f'{col} - Actual', color=colors[i % 10])
-            plt.plot(forecast_df.index, forecast_df[col], label=f'{col} - Forecast', linestyle='--', color=colors[i % 10])
-
-        plt.title('Population Forecast for Next 5 Years (All Age Groups)')
-        plt.xlabel('Year')
-        plt.ylabel('Population(Million)')
-        plt.legend(loc='upper left', bbox_to_anchor=(1.02, 1.0))  # Move legend outside plot
-        st.pyplot(plt.gcf())
-
-    with SE_tabs[3]:
-        st.write('Housing and habitability dashboard')
-        
+        st.image('images/Vulnerability Indicators/Health/LifeExpectancy.png', use_container_width=True)       
 
 with tabs[4]:
     st.header("Resilience Indicators")
