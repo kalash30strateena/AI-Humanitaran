@@ -1,13 +1,18 @@
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 import streamlit as st
 import pandas as pd
 import requests
 import json
+import numpy as np
 import folium
 from streamlit_folium import st_folium
 import matplotlib.pyplot as plt
 from pmdarima import auto_arima
+import pmdarima as pm
 from pandas import json_normalize
 import plotly.graph_objects as go
+import os
 from components.header import show_header
 
 # 1. Set page config FIRST for consistent layout
@@ -198,7 +203,7 @@ with tabs[1]:
     "Hurricanes, Droughts and Floods",
     "Wildfires"])
     with CLI_tabs[0]:
-        # --- City selection dropdown ---
+        
         city_list = ["Bariloche", "Buenos Aires", "Cordoba", "El Calafate", "Iguazu", "Mar del Plata", "Mendoza", "Salta", "Trelew", "Ushuaia"]
         selected_city = st.selectbox("Select a city to view climate data:", city_list)
 
@@ -443,6 +448,32 @@ with tabs[1]:
     
     with CLI_tabs[3]:
         st.header("Wildfires data")
+        col1, col2, col3 = st.columns([1,1,1])
+        
+        
+        with col1:
+            image_folder = r'images/Climate Indicators/wildfires/number_of_fires_month'
+            image_files = [f for f in os.listdir(image_folder) if f.lower().endswith('.png')]
+            pro_names = [os.path.splitext(f)[0] for f in image_files]
+            province = st.selectbox("Select a month to view:", pro_names, index=1)
+            selected_image_path = os.path.join(image_folder, f"{province}.png")
+            st.image(selected_image_path, caption=province, use_container_width=True)
+            
+        with col2:
+            image_folder = r'images/Climate Indicators/wildfires/hectares_fires_province'
+            image_files = [f for f in os.listdir(image_folder) if f.lower().endswith('.png')]
+            pro_names = [os.path.splitext(f)[0] for f in image_files]
+            province = st.selectbox("Select a Province to view the Area burned:", pro_names, index=3)
+            selected_image_path = os.path.join(image_folder, f"{province}.png")
+            st.image(selected_image_path, caption=province, use_container_width=True)
+            
+        with col3:
+            image_folder = r'images/Climate Indicators/wildfires/number_of_fires_jurisdicción'
+            image_files = [f for f in os.listdir(image_folder) if f.lower().endswith('.png')]
+            province_names = [os.path.splitext(f)[0] for f in image_files]
+            province = st.selectbox("Select a Jurisdiction to view:", province_names, index=2)
+            selected_image_path = os.path.join(image_folder, f"{province}.png")
+            st.image(selected_image_path, caption=province, use_container_width=True)
 
 
 with tabs[2]:
