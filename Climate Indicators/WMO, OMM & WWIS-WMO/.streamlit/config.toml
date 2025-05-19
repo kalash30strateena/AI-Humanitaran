@@ -3,3 +3,6 @@ showSidebarNavigation = false
 
 [ui]
 hideSidebarNav = true
+
+[theme]
+base = "light"

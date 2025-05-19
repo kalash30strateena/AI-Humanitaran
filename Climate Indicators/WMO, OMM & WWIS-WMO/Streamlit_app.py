@@ -538,7 +538,7 @@ with tabs[1]:
             selected_image_path = os.path.join(image_folder, f"{province}.png")
             st.image(selected_image_path, caption=province, use_container_width=True)
             
-        with col3:
+        with col2:
             image_folder = r'images/Climate Indicators/wildfires/number_of_fires_jurisdicción'
             image_files = [f for f in os.listdir(image_folder) if f.lower().endswith('.png')]
             province_names = [os.path.splitext(f)[0] for f in image_files]
