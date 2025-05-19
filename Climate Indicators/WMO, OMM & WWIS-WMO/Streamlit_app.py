@@ -1,25 +1,4 @@
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
-warnings.filterwarnings("ignore")
-import seaborn as sns
 import streamlit as st
-import pandas as pd
-import requests
-import json
-import numpy as np
-import folium
-from streamlit_folium import st_folium
-import matplotlib.pyplot as plt
-from pandas.tseries.offsets import DateOffset    
-from pmdarima import auto_arima
-import pmdarima as pm
-from pandas import json_normalize
-import plotly.graph_objects as go
-from datetime import datetime
-import os
-from components.header import show_header
-
-# 1. Set page config FIRST for consistent layout
 st.set_page_config(layout="wide")
 
 st.markdown("""
@@ -33,6 +12,27 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.filterwarnings("ignore")
+import seaborn as sns
+import pandas as pd
+import requests
+import json
+import numpy as np
+import plotly.graph_objects as go
+import folium
+from streamlit_folium import st_folium
+import matplotlib.pyplot as plt
+from pandas.tseries.offsets import DateOffset    
+from pmdarima import auto_arima
+import pmdarima as pm
+from pandas import json_normalize
+import plotly.graph_objects as go
+from datetime import datetime
+import os
+from components.header import show_header
 
 # 2. Show the constant header
 show_header()
@@ -140,7 +140,7 @@ st.markdown("""
     padding: 6px 6px 6px 6px;
     margin: 2px;
     text-align: center;
-    min-width: 200px;
+    min-width: 180px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.07);
     font-family: 'Segoe UI', sans-serif;
     display: flex;
@@ -177,6 +177,7 @@ st.markdown("""
     font-size: 17.5px !important;
     color: #0a0a0a; 
 }}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -276,7 +277,7 @@ with tabs[1]:
         left_col, right_col = st.columns([1,2])
 
         with left_col:
-            map_data = st_folium(city_map, width=450, height=480)
+            map_data = st_folium(city_map, width=450, height=480, use_container_width=True)
 
         def get_city_weather_df(city_name):
             entry = weather_dict.get(city_name, None)
@@ -309,138 +310,204 @@ with tabs[1]:
 
             with right_col:
                 st.markdown('<p class="forecast-summary-header">📊 Monthly Climate Overview</p>', unsafe_allow_html=True)
-                plt.figure(figsize=(17, 10))
-                ax1 = plt.gca()
-                ax1.plot(city_climate['city.climate.climateMonth.month'], city_climate['city.climate.climateMonth.minTemp'], label='Min Temp (°C)', marker='o')
-                ax1.plot(city_climate['city.climate.climateMonth.month'], city_climate['city.climate.climateMonth.maxTemp'], label='Max Temp (°C)', marker='o')
-                ax2 = ax1.twinx()
-                ax2.bar(city_climate['city.climate.climateMonth.month'], city_climate['city.climate.climateMonth.rainfall'], alpha=0.3, color='blue', label='Rainfall (mm)')
-                ax1.set_xlabel('Month')
-                ax1.set_ylabel('Temperature (°C)')
-                ax2.set_ylabel('Rainfall (mm)')
-                ax1.legend(loc='upper left')
-                ax2.legend(loc='upper right')
-                plt.tight_layout()
-                plt.grid(True)
-                st.pyplot(plt.gcf())
 
+                months = city_climate['city.climate.climateMonth.month']
+                min_temp = np.round(city_climate['city.climate.climateMonth.minTemp'], 2)
+                max_temp = np.round(city_climate['city.climate.climateMonth.maxTemp'], 2)
+                rainfall = np.round(city_climate['city.climate.climateMonth.rainfall'], 2)
+
+                fig = go.Figure()
+
+                # Min Temp Line
+                fig.add_trace(go.Scatter(
+                    x=months, y=min_temp, name='Min Temp (°C)', mode='lines+markers',
+                    marker=dict(symbol='circle', size=8), line=dict(color='blue')
+                ))
+
+                # Max Temp Line
+                fig.add_trace(go.Scatter(
+                    x=months, y=max_temp, name='Max Temp (°C)', mode='lines+markers',
+                    marker=dict(symbol='circle', size=8), line=dict(color='orange')
+                ))
+
+                # Rainfall Bar (secondary y-axis)
+                fig.add_trace(go.Bar(
+                    x=months, y=rainfall, name='Rainfall (mm)', yaxis='y2',
+                    marker=dict(color='rgba(30, 144, 255, 0.3)')
+                ))
+                
+                fig.update_xaxes(
+                    showspikes=False,                   # <--- Hides vertical spikelines
+                    color='black',
+                    title_font=dict(color='black'),
+                    tickfont=dict(color='black')
+                )
+                fig.update_yaxes(
+                    showspikes=False,                   # <--- Hides horizontal spikelines
+                    color='black',
+                    title_font=dict(color='black'),
+                    tickfont=dict(color='black')
+                )
+                
+                fig.update_layout(
+                    xaxis=dict(title='Month'),
+                    yaxis=dict(title='Temperature (°C)'),
+                    yaxis2=dict(title='Rainfall (mm)', overlaying='y', side='right'),
+                    legend=dict(x=1.02, y=1, bordercolor='Black', borderwidth=1),
+                    bargap=0.2,
+                    height=500,
+                    margin=dict(l=60, r=60, t=40, b=40),
+                    hovermode='x unified'
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+                # --- Forecast (Next 3 Months) ---
                 st.markdown('<p class="forecast-summary-header">📉 Forecast (Next 3 Months)</p>', unsafe_allow_html=True)
+
                 city_climate.index = pd.period_range(start='2025-01', periods=12, freq='M')
                 forecast_periods = 3
-                future_months = pd.period_range(start='2026-01', periods=forecast_periods, freq='M').strftime('%b')
+                future_periods = pd.period_range(start='2026-01', periods=forecast_periods, freq='M')
 
                 def forecast_series(series, periods=3):
+                    from pmdarima import auto_arima
                     model = auto_arima(series, seasonal=False)
                     forecast = model.predict(n_periods=periods)
-                    return forecast
+                    return np.round(forecast, 2)  # Round forecast to 2 decimals
 
                 minTemp_forecast = forecast_series(city_climate['city.climate.climateMonth.minTemp'])
                 maxTemp_forecast = forecast_series(city_climate['city.climate.climateMonth.maxTemp'])
                 rainfall_forecast = forecast_series(city_climate['city.climate.climateMonth.rainfall'])
 
-                all_months = list(city_climate.index.strftime('%b')) + list(future_months)
-                min_temp_full = list(city_climate['city.climate.climateMonth.minTemp']) + list(minTemp_forecast)
-                max_temp_full = list(city_climate['city.climate.climateMonth.maxTemp']) + list(maxTemp_forecast)
-                rainfall_full  = list(city_climate['city.climate.climateMonth.rainfall']) + list(rainfall_forecast)
+                # Combine periods for x-axis
+                all_periods = list(city_climate.index) + list(future_periods)
+                all_month_labels = [p.strftime('%b %Y') for p in all_periods]
 
-                plt.figure(figsize=(12, 6))
-                ax1 = plt.gca()
-                ax1.plot(all_months[:12], min_temp_full[:12], label='Min Temp (°C) - Actual', marker='o', color='blue')
-                ax1.plot(all_months[:12], max_temp_full[:12], label='Max Temp (°C) - Actual', marker='o', color='orange')
-                ax1.plot(all_months[12:], min_temp_full[12:], linestyle='--', color='cyan', marker='s', label='Min Temp - Forecast')
-                ax1.plot(all_months[12:], max_temp_full[12:], linestyle='--', color='red', marker='s', label='Max Temp - Forecast')
-                ax2 = ax1.twinx()
-                ax2.bar(all_months[:12], rainfall_full[:12], alpha=0.3, color='#f2050d', label='Rainfall - Actual')
-                ax2.bar(all_months[12:], rainfall_full[12:], alpha=0.3, color='green', label='Rainfall - Forecast')
-                ax1.set_xlabel('Month')
-                ax1.set_ylabel('Temperature (°C)')
-                ax2.set_ylabel('Rainfall (mm)')
-                lines1, labels1 = ax1.get_legend_handles_labels()
-                lines2, labels2 = ax2.get_legend_handles_labels()
-                ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left', bbox_to_anchor=(1.02, 1), borderaxespad=1)
-                plt.tight_layout()
-                st.pyplot(plt.gcf())
+                min_temp_full = list(np.round(city_climate['city.climate.climateMonth.minTemp'], 2)) + list(minTemp_forecast)
+                max_temp_full = list(np.round(city_climate['city.climate.climateMonth.maxTemp'], 2)) + list(maxTemp_forecast)
+                rainfall_full  = list(np.round(city_climate['city.climate.climateMonth.rainfall'], 2)) + list(rainfall_forecast)
+
+                fig2 = go.Figure()
+
+                # Actual Min Temp
+                fig2.add_trace(go.Scatter(
+                    x=all_month_labels[:12], y=min_temp_full[:12], name='Min Temp (°C)',
+                    mode='lines+markers', marker=dict(symbol='circle', size=8), line=dict(color='blue')
+                ))
+                # Actual Max Temp
+                fig2.add_trace(go.Scatter(
+                    x=all_month_labels[:12], y=max_temp_full[:12], name='Max Temp (°C)',
+                    mode='lines+markers', marker=dict(symbol='circle', size=8), line=dict(color='orange')
+                ))
+                # Forecast Min Temp
+                fig2.add_trace(go.Scatter(
+                    x=all_month_labels[12:], y=min_temp_full[12:], name='Min Temp - Forecast',
+                    mode='lines+markers', line=dict(dash='dash', color='green'), marker=dict(symbol='square', size=7)
+                ))
+                # Forecast Max Temp
+                fig2.add_trace(go.Scatter(
+                    x=all_month_labels[12:], y=max_temp_full[12:], name='Max Temp - Forecast',
+                    mode='lines+markers', line=dict(dash='dash', color='red'), marker=dict(symbol='square', size=7)
+                ))
+                # Actual Rainfall
+                fig2.add_trace(go.Bar(
+                    x=all_month_labels[:12], y=rainfall_full[:12], name='Rainfall - Actual',
+                    yaxis='y2', marker=dict(color='rgba(242, 5, 13, 0.3)')
+                ))
+                # Forecast Rainfall
+                fig2.add_trace(go.Bar(
+                    x=all_month_labels[12:], y=rainfall_full[12:], name='Rainfall - Forecast',
+                    yaxis='y2', marker=dict(color='rgba(0, 128, 0, 0.3)')
+                ))
+
+                fig2.update_layout(
+                    xaxis=dict(title='Month'),
+                    yaxis=dict(title='Temperature (°C)'),
+                    yaxis2=dict(title='Rainfall (mm)', overlaying='y', side='right'),
+                    legend=dict(x=1.02, y=1, bordercolor='Black', borderwidth=1),
+                    bargap=0.2,
+                    height=500,
+                    margin=dict(l=60, r=60, t=40, b=40),
+                    hovermode='x unified'
+                )
+                fig.update_xaxes(
+                    showspikes=False,                   # <--- Hides vertical spikelines
+                    color='black',
+                    title_font=dict(color='black'),
+                    tickfont=dict(color='black')
+                )
+                fig.update_yaxes(
+                    showspikes=False,                   # <--- Hides horizontal spikelines
+                    color='black',
+                    title_font=dict(color='black'),
+                    tickfont=dict(color='black')
+                )
+                st.plotly_chart(fig2, use_container_width=True)
                 
             with left_col:
-                forecast_df_next3Month = pd.DataFrame({
-                    'Min Temp (°C)': minTemp_forecast,
-                    'Max Temp (°C)': maxTemp_forecast,
-                    'Rainfall (mm)': rainfall_forecast
-                })
-                # Convert 'Month' from '2026-01' to '2026-Jan'
-                month_map = {
-                    '01': 'Jan', '02': 'Feb', '03': 'Mar', '04': 'Apr',
-                    '05': 'May', '06': 'Jun', '07': 'Jul', '08': 'Aug',
-                    '09': 'Sep', '10': 'Oct', '11': 'Nov', '12': 'Dec'
+                # --- Weather Forecast Table (now as 6-day card UI) ---
+                forecast_cols = ['city.forecast.issueDate', 'city.forecast.timeZone']
+                nested_col = 'city.forecast.forecastDay'
+
+                df_base = df[forecast_cols].copy().reset_index(drop=True)
+                exploded = df[nested_col].apply(pd.Series).stack().reset_index(level=1, drop=True).reset_index(drop=True)
+                forecast_normalized = json_normalize(exploded)
+                forecast_normalized['ForecastDay'] = [f'Today+{i}' for i in range(len(forecast_normalized))]
+
+                df_repeated = pd.concat([df_base.loc[i].repeat(7) for i in df_base.index], ignore_index=True)
+                city_forecast = pd.concat([df_repeated.reset_index(drop=True), forecast_normalized], axis=1)
+                city_forecast = city_forecast[['ForecastDay', 'forecastDate', 'wxdesc', 'weather', 'minTemp', 'maxTemp', 'minTempF', 'maxTempF', 'weatherIcon']]
+                city_forecast = city_forecast.head(6)
+                city_forecast['minTemp'] = pd.to_numeric(city_forecast['minTemp'])
+                city_forecast['maxTemp'] = pd.to_numeric(city_forecast['maxTemp'])
+                city_forecast['forecastDate'] = pd.to_datetime(city_forecast['forecastDate'])
+
+                # --- Icon map for weather types ---
+                icon_map = {
+                    'Showers': '🌧️', 'Partly Cloudy': '⛅', 'Mostly Cloudy': '☁️', 'Sunny': '☀️',
+                    'Cloudy': '☁️', 'Rain': '🌧️', 'Thunderstorms': '⛈️', 'Thundershowers': '⛈️',
+                    'Sleet': '🌧️❄️', 'Snow': '❄️', 'Light Rain': '🌦️', 'Sunny Periods': '🌥️',
+                    'Fine': '🌞', 'Mist': '🌫️', 'Storm': '⛈️'
                 }
-                
-                # Round numeric columns to 2 decimals
-                for col in ['Min Temp (°C)', 'Max Temp (°C)', 'Rainfall (mm)']:
-                    forecast_df_next3Month[col] = forecast_df_next3Month[col].round(2)
 
-                st.markdown('<p class="forecast-summary-header">📈 Forecast Summary (for Next 3 Months)</p>', unsafe_allow_html=True)
-                st.dataframe(forecast_df_next3Month, use_container_width=True)
+                st.markdown(
+                    '<div class="forecast-summary-header">Weather forecast of <b>{}</b> (capital city)</div>'.format(selected_city),
+                    unsafe_allow_html=True
+                )
 
-            # --- Weather Forecast Table (now as 6-day card UI) ---
-            forecast_cols = ['city.forecast.issueDate', 'city.forecast.timeZone']
-            nested_col = 'city.forecast.forecastDay'
+                num_cards = len(city_forecast)
+                for i in range(0, num_cards, 2):
+                    cols = st.columns(2)
+                    for j in range(2):
+                        if i + j < num_cards:
+                            row = city_forecast.iloc[i + j]
+                            # Prefer emoji icon if mapped, else fallback to image URL, else default emoji
+                            emoji_icon = icon_map.get(row['weather'], None)
+                            if emoji_icon:
+                                icon_html = emoji_icon
+                            elif pd.notna(row['weatherIcon']) and str(row['weatherIcon']).startswith('http'):
+                                icon_html = f'<img src="{row["weatherIcon"]}" width="38">'
+                            else:
+                                icon_html = "*"
+                            day_name = row['forecastDate'].strftime('%a').upper()
+                            date_str = row['forecastDate'].strftime('%d %b')
+                            with cols[j]:
+                                st.markdown(f"""
+                                <div class="forecast-card">
+                                    <div class="day">{day_name}</div>
+                                    <div class="date">{date_str}</div>
+                                    <div class="icon">{icon_html}</div>
+                                    <div class="desc">{row['wxdesc']}</div>
+                                    <div class="temp">{int(row['minTemp'])}°C | {int(row['maxTemp'])}°C</div>
+                                </div>
+                                """, unsafe_allow_html=True)
 
-            df_base = df[forecast_cols].copy().reset_index(drop=True)
-            exploded = df[nested_col].apply(pd.Series).stack().reset_index(level=1, drop=True).reset_index(drop=True)
-            forecast_normalized = json_normalize(exploded)
-            forecast_normalized['ForecastDay'] = [f'Today+{i}' for i in range(len(forecast_normalized))]
-
-            df_repeated = pd.concat([df_base.loc[i].repeat(7) for i in df_base.index], ignore_index=True)
-            city_forecast = pd.concat([df_repeated.reset_index(drop=True), forecast_normalized], axis=1)
-            city_forecast = city_forecast[['ForecastDay', 'forecastDate', 'wxdesc', 'weather', 'minTemp', 'maxTemp', 'minTempF', 'maxTempF', 'weatherIcon']]
-            city_forecast = city_forecast.head(6)
-            city_forecast['minTemp'] = pd.to_numeric(city_forecast['minTemp'])
-            city_forecast['maxTemp'] = pd.to_numeric(city_forecast['maxTemp'])
-            city_forecast['forecastDate'] = pd.to_datetime(city_forecast['forecastDate'])
-
-            # --- Icon map for weather types ---
-            icon_map = {
-                'Showers': '🌧️', 'Partly Cloudy': '⛅', 'Mostly Cloudy': '☁️', 'Sunny': '☀️',
-                'Cloudy': '☁️', 'Rain': '🌧️', 'Thunderstorms': '⛈️', 'Thundershowers': '⛈️',
-                'Sleet': '🌧️❄️', 'Snow': '❄️', 'Light Rain': '🌦️', 'Sunny Periods': '🌥️',
-                'Fine': '🌞', 'Mist': '🌫️', 'Storm': '⛈️'
-            }
-
-            st.markdown(
-                '<div class="forecast-summary-header">Weather forecast of <b>{}</b> (capital city)</div>'.format(selected_city),
-                unsafe_allow_html=True
-            )
-
-            cols = st.columns(6)
-            for i, row in city_forecast.iterrows():
-                # Prefer emoji icon if mapped, else fallback to image URL, else default emoji
-                emoji_icon = icon_map.get(row['weather'], None)
-                if emoji_icon:
-                    icon_html = emoji_icon
-                elif pd.notna(row['weatherIcon']) and str(row['weatherIcon']).startswith('http'):
-                    icon_html = f'<img src="{row["weatherIcon"]}" width="38">'
-                else:
-                    icon_html = "*"
-                day_name = row['forecastDate'].strftime('%a').upper()
-                date_str = row['forecastDate'].strftime('%d %b')
-                with cols[i]:
-                    st.markdown(f"""
-                    <div class="forecast-card">
-                        <div class="day">{day_name}</div>
-                        <div class="date">{date_str}</div>
-                        <div class="icon">{icon_html}</div>
-                        <div class="desc">{row['wxdesc']}</div>
-                        <div class="temp">{int(row['minTemp'])}°C | {int(row['maxTemp'])}°C</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-            st.markdown(
-                '<div class="forecast-summary-subtext">Issued at {} (Local Time) {}</div>'.format(
-                    city_forecast.iloc[0]['forecastDate'].strftime('%I:%M %p'),
-                    city_forecast.iloc[0]['forecastDate'].strftime('%b %d, %Y')
-                ),
-                unsafe_allow_html=True
-            )
+                st.markdown(
+                    '<div class="forecast-summary-subtext">Issued at {} (Local Time) {}</div>'.format(
+                        city_forecast.iloc[0]['forecastDate'].strftime('%I:%M %p'),
+                        city_forecast.iloc[0]['forecastDate'].strftime('%b %d, %Y')
+                    ),
+                    unsafe_allow_html=True
+                )
         else:
             st.warning(f"Weather data for {selected_city} is unavailable.")
         
@@ -463,11 +530,11 @@ with tabs[1]:
             selected_image_path = os.path.join(image_folder, f"{province}.png")
             st.image(selected_image_path, caption=province, use_container_width=True)
             
-        with col2:
+        with col3:
             image_folder = r'images/Climate Indicators/wildfires/hectares_fires_province'
             image_files = [f for f in os.listdir(image_folder) if f.lower().endswith('.png')]
             pro_names = [os.path.splitext(f)[0] for f in image_files]
-            province = st.selectbox("Select a Province to view the Area burned:", pro_names, index=3)
+            province = st.selectbox("Select a Province to view fire impact :", pro_names, index=3)
             selected_image_path = os.path.join(image_folder, f"{province}.png")
             st.image(selected_image_path, caption=province, use_container_width=True)
             
