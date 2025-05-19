@@ -9,6 +9,11 @@ st.markdown("""
         .block-container {
             padding-top: 0rem; /* Adjust this value as needed */
         }
+        
+        h1:hover a, h2:hover a, h3:hover a, h4:hover a, h5:hover a, h6:hover a {
+        display: none !important;
+        }
+        
     </style>
 """, unsafe_allow_html=True)
 
@@ -137,7 +142,7 @@ st.markdown("""
     background: #62a1c7;
     color: #fff;
     border-radius: 10px;
-    padding: 6px 6px 6px 6px;
+    padding: 5px 5px 5px 5px;
     margin: 2px;
     text-align: center;
     min-width: 180px;
@@ -182,7 +187,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="main-content">', unsafe_allow_html=True)
-st.markdown("<h1 style='text-align: center'>ARGENTINA</h1>", unsafe_allow_html=True)
+st.markdown(
+    "<div style='text-align: center; font-size: 2.5em; font-weight: bold;'>ARGENTINA</div>",
+    unsafe_allow_html=True
+)
+
 
 tabs = st.tabs([
     "Country Profile",
@@ -195,7 +204,6 @@ tabs = st.tabs([
 
 # --- Climate Indicators Tab ---
 with tabs[0]:
-    st.header("Argentina !!")
     st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Mapa_Argentina_Tipos_clima_IGN.jpg/500px-Mapa_Argentina_Tipos_clima_IGN.jpg",
         caption="Mapa de los tipos de clima en Argentina", use_container_width=120 )
 
@@ -353,7 +361,7 @@ with tabs[1]:
                     xaxis=dict(title='Month'),
                     yaxis=dict(title='Temperature (°C)'),
                     yaxis2=dict(title='Rainfall (mm)', overlaying='y', side='right'),
-                    legend=dict(x=1.02, y=1, bordercolor='Black', borderwidth=1),
+                    legend=dict(x=1.09, y=1, bordercolor='Black', borderwidth=1),
                     bargap=0.2,
                     height=500,
                     margin=dict(l=60, r=60, t=40, b=40),
@@ -423,7 +431,7 @@ with tabs[1]:
                     xaxis=dict(title='Month'),
                     yaxis=dict(title='Temperature (°C)'),
                     yaxis2=dict(title='Rainfall (mm)', overlaying='y', side='right'),
-                    legend=dict(x=1.02, y=1, bordercolor='Black', borderwidth=1),
+                    legend=dict(x=1.09, y=1, bordercolor='Black', borderwidth=1),
                     bargap=0.2,
                     height=500,
                     margin=dict(l=60, r=60, t=40, b=40),
@@ -527,6 +535,7 @@ with tabs[1]:
             image_files = [f for f in os.listdir(image_folder) if f.lower().endswith('.png')]
             pro_names = [os.path.splitext(f)[0] for f in image_files]
             province = st.selectbox("Select a month to view:", pro_names, index=1)
+            st.markdown("<br>", unsafe_allow_html=True)
             selected_image_path = os.path.join(image_folder, f"{province}.png")
             st.image(selected_image_path, caption=province, use_container_width=True)
             
@@ -535,6 +544,7 @@ with tabs[1]:
             image_files = [f for f in os.listdir(image_folder) if f.lower().endswith('.png')]
             pro_names = [os.path.splitext(f)[0] for f in image_files]
             province = st.selectbox("Select a Province to view fire impact :", pro_names, index=3)
+            st.markdown("<br>", unsafe_allow_html=True)
             selected_image_path = os.path.join(image_folder, f"{province}.png")
             st.image(selected_image_path, caption=province, use_container_width=True)
             
@@ -543,6 +553,7 @@ with tabs[1]:
             image_files = [f for f in os.listdir(image_folder) if f.lower().endswith('.png')]
             province_names = [os.path.splitext(f)[0] for f in image_files]
             province = st.selectbox("Select a Jurisdiction to view:", province_names, index=2)
+            st.markdown("<br>", unsafe_allow_html=True)
             selected_image_path = os.path.join(image_folder, f"{province}.png")
             st.image(selected_image_path, caption=province, use_container_width=True)
 
