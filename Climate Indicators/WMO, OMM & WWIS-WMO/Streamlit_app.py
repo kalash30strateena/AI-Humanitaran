@@ -527,35 +527,44 @@ with tabs[1]:
     
     with CLI_tabs[3]:
         st.header("Wildfires data")
-        col1, col2, col3 = st.columns([1,1,1])
-        
+        col1, col2, col3, col4 = st.columns([1,1,1,1])
         
         with col1:
+            image_folder = r'images/Climate Indicators/wildfires/number_of_fires_region'
+            image_files = [f for f in os.listdir(image_folder) if f.lower().endswith('.png')]
+            pro_names = [os.path.splitext(f)[0] for f in image_files]
+            province = st.selectbox("Select a month to view fire alerts per region:", pro_names, index=0)
+            st.markdown("<br>", unsafe_allow_html=True)
+            selected_image_path = os.path.join(image_folder, f"{province}.png")
+            st.image(selected_image_path, caption=province, use_container_width=True)
+        
+        with col2:
             image_folder = r'images/Climate Indicators/wildfires/number_of_fires_month'
             image_files = [f for f in os.listdir(image_folder) if f.lower().endswith('.png')]
             pro_names = [os.path.splitext(f)[0] for f in image_files]
-            province = st.selectbox("Select a month to view:", pro_names, index=1)
+            province = st.selectbox("Select a month to view fire alerts per year:", pro_names, index=1)
+            st.markdown("<br>", unsafe_allow_html=True)
+            selected_image_path = os.path.join(image_folder, f"{province}.png")
+            st.image(selected_image_path, caption=province, use_container_width=True)
+        
+        with col3:
+            image_folder = r'images/Climate Indicators/wildfires/number_of_fires_province'
+            image_files = [f for f in os.listdir(image_folder) if f.lower().endswith('.png')]
+            province_names = [os.path.splitext(f)[0] for f in image_files]
+            province = st.selectbox("Select a Province to view amount of fire alerts:", province_names, index=2)
             st.markdown("<br>", unsafe_allow_html=True)
             selected_image_path = os.path.join(image_folder, f"{province}.png")
             st.image(selected_image_path, caption=province, use_container_width=True)
             
-        with col3:
+        with col4:
             image_folder = r'images/Climate Indicators/wildfires/hectares_fires_province'
             image_files = [f for f in os.listdir(image_folder) if f.lower().endswith('.png')]
             pro_names = [os.path.splitext(f)[0] for f in image_files]
-            province = st.selectbox("Select a Province to view fire impact :", pro_names, index=3)
+            province = st.selectbox("Select a Province to view land fire damage:", pro_names, index=3)
             st.markdown("<br>", unsafe_allow_html=True)
             selected_image_path = os.path.join(image_folder, f"{province}.png")
             st.image(selected_image_path, caption=province, use_container_width=True)
             
-        with col2:
-            image_folder = r'images/Climate Indicators/wildfires/number_of_fires_jurisdicción'
-            image_files = [f for f in os.listdir(image_folder) if f.lower().endswith('.png')]
-            province_names = [os.path.splitext(f)[0] for f in image_files]
-            province = st.selectbox("Select a Jurisdiction to view:", province_names, index=2)
-            st.markdown("<br>", unsafe_allow_html=True)
-            selected_image_path = os.path.join(image_folder, f"{province}.png")
-            st.image(selected_image_path, caption=province, use_container_width=True)
 
 
 with tabs[2]:
