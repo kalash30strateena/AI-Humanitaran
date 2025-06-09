@@ -25,14 +25,17 @@ show_header()
 
 st.markdown("<h2 style='text-align: center;'>Login</h2>", unsafe_allow_html=True)
 
+DB_CONFIG = {
+    'dbname': 'postgres',
+    'user': 'postgres.ajbcqqwgdmfscvmkbtqz',
+    'password': 'StrateenaAIML',
+    'host': 'aws-0-ap-south-1.pooler.supabase.com',
+    'port': 6543
+}
+
 # --- Database Connection ---
 def get_db_connection():
-    return psycopg2.connect(
-        host="localhost",
-        database="demo",
-        user="postgres",
-        password="Database@123"
-    )
+    return psycopg2.connect(**DB_CONFIG)
 col1, col2, col3 = st.columns([9, 8, 9]) 
 
 with col2:

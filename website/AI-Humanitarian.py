@@ -933,7 +933,6 @@ with tabs[1]:
 
 with tabs[2]:
     st.header("Socio-economic Indicators")
-    st.write("Information on demographics, economics, and social factors.")
     
     SE_tabs = st.tabs([
     "Poverty and Inequality",
@@ -942,7 +941,6 @@ with tabs[2]:
     "Education"])
     
     with SE_tabs[0]:
-        st.write('Poverty and Inequality dashboard')
         
         @st.cache_data
         def get_filtered_data(indicator_list):
@@ -1161,7 +1159,6 @@ with tabs[4]:
     }
 
     st.header("Resilience Indicators")
-    st.write("Data measuring ability to prepare for, respond to, and recover.")
 
     # --- Main selection only ---
     main_category = st.selectbox("Select Main Indicator Category", list(indicator_hierarchy.keys()))

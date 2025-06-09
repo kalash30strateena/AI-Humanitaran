@@ -60,15 +60,17 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+DB_CONFIG = {
+    'dbname': 'postgres',
+    'user': 'postgres.ajbcqqwgdmfscvmkbtqz',
+    'password': 'StrateenaAIML',
+    'host': 'aws-0-ap-south-1.pooler.supabase.com',
+    'port': 6543
+}
 
 # --- Database Connection ---
 def get_db_connection():
-    return psycopg2.connect(
-        host="localhost",
-        database="demo",
-        user="postgres",
-        password="Database@123"
-    )
+    return psycopg2.connect(**DB_CONFIG)
 
 # --- Form Layout ---
 st.markdown("<h2 align=center>Register</h2>", unsafe_allow_html=True)
