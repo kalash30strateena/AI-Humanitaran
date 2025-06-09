@@ -5,3 +5,8 @@ plotly
 matplotlib
 pmdarima
 numpy
+seaborn
+pmdarima
+psycopg2-binary
+bcrypy
+sqlalchemy
