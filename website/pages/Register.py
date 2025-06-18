@@ -1,27 +1,13 @@
 import streamlit as st
+st.set_page_config(layout="wide")
+from components.styles import apply_global_styles # type: ignore
+apply_global_styles()
 import re
 import bcrypt
 import psycopg2
-
-# --- Streamlit Page Config and Styling ---
-st.set_page_config(layout="wide")
-
-st.markdown("""
-    <style>
-        MainMenu {visibility: hidden;}
-        header {visibility: hidden;}
-        footer {visibility: hidden;}
-        .block-container {
-            padding-top: 0rem;
-        }
-        h1:hover a, h2:hover a, h3:hover a, h4:hover a, h5:hover a, h6:hover a {
-            display: none !important;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
 from components.header import show_header # type: ignore
 show_header()
+
 
 st.markdown("""
     <style>
@@ -60,12 +46,13 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
 DB_CONFIG = {
-    'dbname': 'postgres',
-    'user': 'postgres.ajbcqqwgdmfscvmkbtqz',
-    'password': 'StrateenaAIML',
-    'host': 'aws-0-ap-south-1.pooler.supabase.com',
-    'port': 6543
+        'dbname': 'postgres',
+        'user': 'postgres.ajbcqqwgdmfscvmkbtqz',
+        'password': 'StrateenaAIML',
+        'host': 'aws-0-ap-south-1.pooler.supabase.com',
+        'port': 6543
 }
 
 # --- Database Connection ---
@@ -123,6 +110,7 @@ with col2:
                     st.success("Registration successful! You can now login.")
                 cur.close()
                 conn.close()
+                st.switch_page("pages/Login.py")
             except Exception as e:
                 st.error(f"Database error: {e}")
 

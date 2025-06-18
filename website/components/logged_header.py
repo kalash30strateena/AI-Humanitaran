@@ -1,22 +1,5 @@
 import streamlit as st
-
-st.markdown("""
-    <style>
-        MainMenu {visibility: hidden;}
-        header {visibility: hidden;}
-        footer {visibility: hidden;}
-        .block-container {
-            padding-top: 0rem; /* Adjust this value as needed */
-        }
-        
-        h1:hover a, h2:hover a, h3:hover a, h4:hover a, h5:hover a, h6:hover a {
-        display: none !important;
-        }
-        
-    </style>
-""", unsafe_allow_html=True)
-
-def show_header():
+def logged_header():
     if "language" not in st.session_state:
         st.session_state["language"] = "English"
 
@@ -143,9 +126,7 @@ def show_header():
                     <option value="Español" {esp_selected}>Español</option>
                 </select>
             </form>
-            <a href="/" target="_self">Home</a>
-            <a href="/Login" target="_self">Login</a>
-            <a href="/Register" target="_self">Register</a>
+            <a href="/" target="_self">Logout</a>
         </div>
     </div>
     """.format(
