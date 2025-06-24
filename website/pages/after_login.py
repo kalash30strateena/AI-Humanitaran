@@ -2,6 +2,7 @@ import streamlit as st
 from components.styles import apply_global_styles # type: ignore
 apply_global_styles()
 
+
 # Check login status
 if "logged_in" not in st.session_state or not st.session_state["logged_in"]:
     st.switch_page("pages/Login.py")
@@ -18,7 +19,6 @@ warnings.filterwarnings("ignore")
 import seaborn as sns # type: ignore
 import psycopg2
 from pmdarima import auto_arima #type: ignore
-import bcrypt
 from datetime import datetime
 import pandas as pd
 import itertools
@@ -29,7 +29,6 @@ import plotly.graph_objects as go
 import folium # type: ignore
 from streamlit_folium import st_folium # type: ignore
 from sqlalchemy import create_engine # type: ignore
-import matplotlib.pyplot as plt # type: ignore
 from pandas.tseries.offsets import DateOffset    
 from pmdarima import auto_arima # type: ignore
 import pmdarima as pm # type: ignore
@@ -472,7 +471,7 @@ with tabs[1]:
 
             # --- Clean up types ---
             if not df_forecast.empty:
-                df_forecast['forecastdate'] = pd.to_datetime(df_forecast['forecastdate'], format='%d-%m-%Y %H:%M')
+                df_forecast['forecastdate'] = pd.to_datetime(df_forecast['forecastdate'], format='%Y-%m-%d')
                 df_forecast['minTemp'] = pd.to_numeric(df_forecast['minTemp'])
                 df_forecast['maxTemp'] = pd.to_numeric(df_forecast['maxTemp'])
 
@@ -1015,7 +1014,6 @@ with tabs[2]:
     SE_tabs = st.tabs([
     "Poverty and Inequality",
     "Migration",
-    "Health and Sanitation",
     "Employment and Economy",
     "Education"])
     
@@ -1184,29 +1182,27 @@ with tabs[2]:
 
             row = rows[i // 3]  
             row[i % 3].plotly_chart(fig)
-            
-
-
     
-    with SE_tabs[2]:
-        st.write('Health and Sanitation Dashboard')
+    with SE_tabs[1]:
+        st.write('Migration Dashboard')
         
-    with SE_tabs[3]:
+    with SE_tabs[2]:
         st.write('Employment and Economy Dashboard')
         
-    with SE_tabs[4]:
+    with SE_tabs[3]:
         st.write('Education dashboard')
         
 
 with tabs[3]:
     st.header("Vulnerability Indicators")    
-    SE_tabs = st.tabs([
+    VI_tabs = st.tabs([
     "Age",
     "Gender",
     "Health",
-    "Housing conditions and habitability"])
+    "Housing conditions and habitability",
+    "Urban development"])
     
-    with SE_tabs[0]:
+    with VI_tabs[0]:
         
         @st.cache_data
         def get_filtered_data(indicator_list):
@@ -1311,7 +1307,7 @@ with tabs[3]:
         df = get_filtered_data(selected_indicators)
         plot_all_indicators_with_forecast(df)
         
-    with SE_tabs[1]:
+    with VI_tabs[1]:
         
         @st.cache_data
         def get_filtered_data(indicator_list):
@@ -1391,7 +1387,7 @@ with tabs[3]:
         df = get_filtered_data(gender_indicators)
         plot_combined_forecast(df, gender_indicators)
 
-    with SE_tabs[2]:
+    with VI_tabs[2]:
         
         color_palette = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
         color_cycle = itertools.cycle(color_palette)
@@ -1704,7 +1700,64 @@ with tabs[3]:
             plots.extend(plot_other())
 
         display_plots(plots)
+        
+    with VI_tabs[4]:
+        indicator_groups = {
+            "Demographic" : ['Population density (people per sq. km of land area)', 'Population in largest city', 
+                    'Population in the largest city (% of urban population)', 'Population in urban agglomerations of more than 1 million', 
+                    'Population in urban agglomerations of more than 1 million (% of total population)', 'Urban population growth (annual %)', 'Urban population', 'Urban population (% of total)'
+                    ],
+            "Health & Safety" : ['Mortality caused by road traffic injury (per 100,000 population)'],
+            "Infrastructure": ['Access to electricity, urban (% of urban population)']
+        }
 
+        @st.cache_data
+        def get_filtered_data(indicator_list):
+            conn = psycopg2.connect(**DB_CONFIG)
+            # Handle single and multiple indicators correctly
+            if len(indicator_list) == 1:
+                query = f"""
+                SELECT year, indicator_name, value 
+                FROM urban_development
+                WHERE indicator_name = '{indicator_list[0]}'
+                ORDER BY year;
+                """
+            else:
+                query = f"""
+                SELECT year, indicator_name, value 
+                FROM urban_development
+                WHERE indicator_name IN {tuple(indicator_list)}
+                ORDER BY year;
+                """
+            df = pd.read_sql(query, conn)
+            conn.close()
+            
+            df["year"] = pd.to_datetime(df["year"], format='%Y')
+            df.set_index("year", inplace=True)
+            df = df.pivot(columns="indicator_name", values="value").sort_index()
+            return df
+
+        selected_category = st.selectbox("Select a Poverty Category", list(indicator_groups.keys()))
+        selected_indicators = indicator_groups[selected_category]
+        df = get_filtered_data(selected_indicators)
+
+        rows = [st.columns(3) for _ in range((len(df.columns) + 2) // 3)]  
+        colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b"]
+
+        for i, indicator in enumerate(df.columns):
+            color = colors[i % len(colors)]
+            min_year = df[indicator].dropna().index.min()  # Get first available year
+            max_year = df[indicator].dropna().index.max()  # Get last available year
+            filtered_df = df.loc[min_year:max_year]  # Filter dataframe within this range
+                
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=filtered_df.index, y=filtered_df[indicator], mode="lines+markers", name=indicator, line=dict(color=color)))
+            fig.update_layout(title=indicator, xaxis_title="Year", yaxis_title="value", width=450, height=400, template="plotly_white", legend=dict(x=1, y=0.5, bgcolor="rgba(255,255,255,0.5)", font=dict(size=10)))
+
+            row = rows[i // 3]  
+            row[i % 3].plotly_chart(fig)
+
+        
 with tabs[4]:
 
     indicator_categories = {
@@ -1792,6 +1845,7 @@ with tabs[4]:
 
 with tabs[5]:
     # --- Indicator mapping ---
+    st.write('AGRICULTURE')
     agriculture_mapping = {
         "Fertilizer consumption (% of fertilizer production)": "Agricultural Inputs",
         "Fertilizer consumption (kilograms per hectare of arable land)": "Agricultural Inputs",
@@ -1875,3 +1929,130 @@ with tabs[5]:
                     color_discrete_sequence=[color]
                 )
                 cols[j].plotly_chart(fig, use_container_width=True)
+                
+    st.write('Enviornment')
+    indicator_categories = {
+        "Agriculture & Rural Development": [
+        'Agricultural land (% of land area)', 'Arable land (% of land area)', 
+        'Forest area (sq. km)', 'Forest area (% of land area)','Access to clean fuels and technologies for cooking, rural (% of rural population)',
+        'Terrestrial protected areas (% of total land area)',
+        'Forest rents (% of GDP)','People using at least basic drinking water services, rural (% of rural population)',       
+        'People using at least basic sanitation services, rural (% of rural population)'
+        ],
+        "Environment & Climate": {
+            "Pollution": [
+                'PM2.5 air pollution, mean annual exposure (micrograms per cubic meter)',
+                'PM2.5 pollution, population exposed to levels exceeding WHO Interim Target-1 value (% of total)',
+                'PM2.5 pollution, population exposed to levels exceeding WHO Interim Target-2 value (% of total)',
+                'PM2.5 pollution, population exposed to levels exceeding WHO Interim Target-3 value (% of total)',
+                'PM2.5 air pollution, population exposed to levels exceeding WHO guideline value (% of total)'
+            ],
+            "Greenhouse Gas Emission": [
+            'Total greenhouse gas emissions including LULUCF (Mt CO2e)','Total greenhouse gas emissions excluding LULUCF (Mt CO2e)',
+            'Total greenhouse gas emissions excluding LULUCF per capita (t CO2e/capita)', 'Total greenhouse gas emissions excluding LULUCF (% change from 1990)'
+
+            ],
+            "Methane (CH4) Emission": [
+                'Methane (CH4) emissions from Agriculture (Mt CO2e)','Methane (CH4) emissions from Building (Energy) (Mt CO2e)',
+                'Methane (CH4) emissions from Fugitive Emissions (Energy) (Mt CO2e)','Methane (CH4) emissions from Industrial Combustion (Energy) (Mt CO2e)',
+                'Methane (CH4) emissions from Industrial Processes (Mt CO2e)','Methane (CH4) emissions (total) excluding LULUCF (Mt CO2e)',
+                'Methane (CH4) emissions from Power Industry (Energy) (Mt CO2e)','Methane (CH4) emissions from Transport (Energy) (Mt CO2e)',
+                'Methane (CH4) emissions from Waste (Mt CO2e)', 'Methane (CH4) emissions (total) excluding LULUCF (% change from 1990)'
+                ],
+            "Carbon Dioxide (CO2) Emission": [
+                'Carbon dioxide (CO2) emissions from Agriculture (Mt CO2e)', 'Carbon dioxide (CO2) emissions from Building (Energy) (Mt CO2e)',
+                'Carbon dioxide (CO2) emissions from Fugitive Emissions (Energy) (Mt CO2e)','Carbon dioxide (CO2) emissions from Industrial Combustion (Energy) (Mt CO2e)',
+                'Carbon dioxide (CO2) emissions from Industrial Processes (Mt CO2e)','Carbon dioxide (CO2) net fluxes from LULUCF - Deforestation (Mt CO2e)',
+                'Carbon dioxide (CO2) net fluxes from LULUCF - Forest Land (Mt CO2e)','Carbon dioxide (CO2) net fluxes from LULUCF - Total excluding non-tropical fires (Mt CO2e)',
+                'Carbon dioxide (CO2) net fluxes from LULUCF - Other Land (Mt CO2e)','Carbon dioxide (CO2) net fluxes from LULUCF - Organic Soil (Mt CO2e)',
+                'Carbon dioxide (CO2) emissions (total) excluding LULUCF (Mt CO2e)','Carbon dioxide (CO2) emissions excluding LULUCF per capita (t CO2e/capita)',
+                'Carbon dioxide (CO2) emissions from Power Industry (Energy) (Mt CO2e)'
+            ],
+            "F Gas Emission": [
+                'F-gases emissions from Industrial Processes (Mt CO2e)'
+            ],
+            "Nitrous Oxide (N2O) Emission": [
+                'Nitrous oxide (N2O) emissions from Agriculture (Mt CO2e)','Nitrous oxide (N2O) emissions from Building (Energy) (Mt CO2e)',
+                'Nitrous oxide (N2O) emissions from Fugitive Emissions (Energy) (Mt CO2e)','Nitrous oxide (N2O) emissions from Industrial Combustion (Energy) (Mt CO2e)', 
+                'Nitrous oxide (N2O) emissions from Industrial Processes (Mt CO2e)','Nitrous oxide (N2O) emissions (total) excluding LULUCF (Mt CO2e)', 
+                'Nitrous oxide (N2O) emissions from Power Industry (Energy) (Mt CO2e)','Nitrous oxide (N2O) emissions from Transport (Energy) (Mt CO2e)',
+                'Nitrous oxide (N2O) emissions from Waste (Mt CO2e)','Nitrous oxide (N2O) emissions (total) excluding LULUCF (% change from 1990)'
+            ]
+        },
+        "Health": [
+        'Mortality rate attributed to unintentional poisoning (per 100,000 population)',
+        'Mortality rate attributed to unintentional poisoning, female (per 100,000 female population)',
+        'Mortality rate attributed to unintentional poisoning, male (per 100,000 male population)',
+        'Mortality rate attributed to household and ambient air pollution, age-standardized (per 100,000 population)',
+        'Mortality rate attributed to unsafe water, unsafe sanitation and lack of hygiene (per 100,000 population)'
+        ],
+        "Infrastructure & Urban Development": [
+            'Access to clean fuels and technologies for cooking, urban (% of urban population)','Access to electricity (% of population)', 
+            'Urban population living in areas where elevation is below 5 meters (% of total population)','Population living in slums (% of urban population)',
+            'People using at least basic sanitation services, urban (% of urban population)','People using at least basic drinking water services, urban (% of urban population)',
+            'People practicing open defecation, urban (% of urban population)','People using safely managed sanitation services, urban (% of urban population)'
+        ],
+        "Other" : [
+            'Energy intensity level of primary energy (MJ/$2017 PPP GDP)','Renewable energy consumption (% of total final energy consumption)','Plant species (higher), threatened', 
+            'Mammal species, threatened','Population living in areas where elevation is below 5 meters (% of total population)',
+            'Water productivity, total (constant 2015 US$ GDP per cubic meter of total freshwater withdrawal)',  'Level of water stress: freshwater withdrawal as a proportion of available freshwater resources',
+            'Marine protected areas (% of territorial waters)','Terrestrial and marine protected areas (% of total territorial area)','Coal rents (% of GDP)','Mineral rents (% of GDP)', 
+            'Natural gas rents (% of GDP)','Oil rents (% of GDP)', 'Total natural resources rents (% of GDP)','People using at least basic drinking water services (% of population)',
+            'People using at least basic sanitation services (% of population)','People practicing open defecation (% of population)','People using safely managed sanitation services (% of population)'
+        ]
+    }
+
+    @st.cache_data
+    def get_filtered_data(indicator_list):
+        """Fetch data from the specified table and filter by given indicators."""
+        conn = psycopg2.connect(**DB_CONFIG)
+        # Handle single and multiple indicators correctly
+        if len(indicator_list) == 1:
+            query = f"""
+            SELECT year, indicator_name, value 
+            FROM environment 
+            WHERE indicator_name = '{indicator_list[0]}'
+            ORDER BY year;
+            """
+        else:
+            query = f"""
+            SELECT year, indicator_name, value 
+            FROM environment 
+            WHERE indicator_name IN {tuple(indicator_list)}
+            ORDER BY year;
+            """
+            
+        df = pd.read_sql(query, conn)
+        conn.close()
+        
+        df["year"] = pd.to_datetime(df["year"], format='%Y')
+        df.set_index("year", inplace=True)
+        df = df.pivot(columns="indicator_name", values="value").sort_index()
+        return df
+
+    selected_category = st.selectbox("Select a category", list(indicator_categories.keys()))
+    if isinstance(indicator_categories[selected_category], dict):
+        selected_subcategory = st.selectbox("Select a Subcategory", list(indicator_categories[selected_category].keys()))
+        indicators = indicator_categories[selected_category][selected_subcategory]
+    else:
+        selected_subcategory = None
+        indicators = indicator_categories[selected_category]
+        
+    df = get_filtered_data(indicators)
+
+    rows = [st.columns(3) for _ in range((len(df.columns) + 2) // 3)]  
+    colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b"]
+        
+    for i, indicator in enumerate(df.columns):
+        color = colors[i % len(colors)]
+        min_year = df[indicator].dropna().index.min()  # Get first available year
+        max_year = df[indicator].dropna().index.max()  # Get last available year
+        filtered_df = df.loc[min_year:max_year]  # Filter dataframe within this range
+            
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=filtered_df.index, y=filtered_df[indicator], mode="lines+markers", name=indicator, line=dict(color=color)))
+        fig.update_layout(title=indicator, xaxis_title="Year", yaxis_title="Population (%)", width=450, height=400, template="plotly_white", legend=dict(x=1, y=0.5, bgcolor="rgba(255,255,255,0.5)", font=dict(size=10)))
+
+        row = rows[i // 3]  
+        row[i % 3].plotly_chart(fig)
+
