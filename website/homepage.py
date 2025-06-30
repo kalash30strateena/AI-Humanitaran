@@ -6,6 +6,8 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.filterwarnings("ignore")
 from components.header import show_header 
+import os
+from docx import Document
 show_header()
 
 
@@ -49,8 +51,38 @@ tabs = st.tabs([
 ])
 
 with tabs[0]:
-    st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Mapa_Argentina_Tipos_clima_IGN.jpg/500px-Mapa_Argentina_Tipos_clima_IGN.jpg",
-        caption="Mapa de los tipos de clima en Argentina", use_container_width=False ,width=500 )
+    left_col , right_col = st.columns([4,5])
+    with left_col:
+        st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Mapa_Argentina_Tipos_clima_IGN.jpg/500px-Mapa_Argentina_Tipos_clima_IGN.jpg",
+        caption="Mapa de los tipos de clima en Argentina", use_container_width=160 )
+    with right_col:
+        st.write(" ")
+        docx_path = "docs/country_profile_data.docx"  # Your file path
+        def docx_to_markdown(doc):
+            md_lines = []
+            for para in doc.paragraphs:
+                md_para = ""
+                for run in para.runs:
+                    text = run.text.replace('\n', ' ')
+                    if not text:
+                        continue
+                    # Apply formatting
+                    if run.bold:
+                        text = f"**{text}**"
+                    if run.italic:
+                        text = f"*{text}*"
+                    if run.underline:
+                        text = f"__{text}__"
+                    md_para += text
+                md_lines.append(md_para)
+            return "\n".join(md_lines)
+
+        if os.path.exists(docx_path):
+            doc = Document(docx_path)
+            markdown_content = docx_to_markdown(doc)
+            st.markdown(markdown_content)
+        else:
+            st.error(f"File not found: {docx_path}")
     
 for i in range(1, 6):
     with tabs[i]:
@@ -66,3 +98,4 @@ for i in range(1, 6):
             <h3>Login to view the content</h3>
         </div>
         """, unsafe_allow_html=True)
+        

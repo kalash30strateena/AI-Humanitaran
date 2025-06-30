@@ -1,3 +1,8 @@
+# import streamlit as st
+# st.set_page_config(layout="wide")
+# from components.styles import apply_global_styles # type: ignore
+# apply_global_styles()
+
 import streamlit as st
 from components.styles import apply_global_styles # type: ignore
 apply_global_styles()
@@ -12,6 +17,7 @@ if "from_view_indicators" not in st.session_state or not st.session_state["from_
     st.switch_page("pages/Login.py")
     st.stop()
 
+
 import warnings
 import plotly.express as px
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -23,6 +29,8 @@ from datetime import datetime
 import pandas as pd
 import itertools
 import calendar
+import requests
+import re
 import json
 import numpy as np
 import plotly.graph_objects as go
@@ -33,9 +41,11 @@ from pandas.tseries.offsets import DateOffset
 from pmdarima import auto_arima # type: ignore
 import pmdarima as pm # type: ignore
 from pandas import json_normalize
+import altair as alt
 import plotly.graph_objects as go
 from datetime import datetime
 import os
+from docx import Document
 from components.logged_header import logged_header # type: ignore
 import urllib.parse
 from sqlalchemy import create_engine # type: ignore
@@ -196,6 +206,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+
 DB_CONFIG = {
     'dbname': 'postgres',
     'user': 'postgres.ajbcqqwgdmfscvmkbtqz',
@@ -219,245 +230,286 @@ tabs = st.tabs([
     "Resilience Indicators",
     "Humanitarian Indicators"
 ])
+engine=get_engine()
 
+icon_map = {
+                'Showers': '🌧️', 'Partly Cloudy': '⛅', 'Mostly Cloudy': '☁️', 'Sunny': '☀️',
+                'Cloudy': '☁️', 'Rain': '🌧️', 'Thunderstorms': '⛈️', 'Thundershowers': '⛈️',
+                'Sleet': '🌧️❄️', 'Snow': '❄️', 'Light Rain': '🌦️', 'Sunny Periods': '🌥️',
+                'Fine': '🌞', 'Mist': '🌫️', 'Storm': '⛈️'
+            }
 # --- Climate Indicators Tab ---
-with tabs[0]:
-    st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Mapa_Argentina_Tipos_clima_IGN.jpg/500px-Mapa_Argentina_Tipos_clima_IGN.jpg",
-        caption="Mapa de los tipos de clima en Argentina", use_container_width=120 )
 
+with tabs[0]:
+    left_col , right_col = st.columns([4,5])
+    with left_col:
+        st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Mapa_Argentina_Tipos_clima_IGN.jpg/500px-Mapa_Argentina_Tipos_clima_IGN.jpg",
+        caption="Mapa de los tipos de clima en Argentina", use_container_width=160 )
+    with right_col:
+        st.write(" ")
+        docx_path = "docs/country_profile_data.docx"  # Your file path
+        def docx_to_markdown(doc):
+            md_lines = []
+            for para in doc.paragraphs:
+                md_para = ""
+                for run in para.runs:
+                    text = run.text.replace('\n', ' ')
+                    if not text:
+                        continue
+                    # Apply formatting
+                    if run.bold:
+                        text = f"**{text}**"
+                    if run.italic:
+                        text = f"*{text}*"
+                    if run.underline:
+                        text = f"__{text}__"
+                    md_para += text
+                md_lines.append(md_para)
+            return "\n".join(md_lines)
+
+        if os.path.exists(docx_path):
+            doc = Document(docx_path)
+            markdown_content = docx_to_markdown(doc)
+            st.markdown(markdown_content)
+        else:
+            st.error(f"File not found: {docx_path}")        
+        
 with tabs[1]:
     st.header("Climate Indicators")
     
     CLI_tabs = st.tabs([
-    "Temperature and Precipitation",
+    "Temperature",
+    "Precipitation",
     "Sea Level",
     "Hurricanes, Droughts and Floods",
     "Wildfires"])
     
     with CLI_tabs[0]:
 
-        # --- City list ---
-        city_list = ["Bariloche", "Buenos Aires", "Cordoba", "El Calafate", "Iguazu", "Mar del Plata", "Mendoza", "Salta", "Trelew", "Ushuaia"]
-
-        # --- Load city geojson ---
-        with open("map.geojson", "r", encoding="utf-8") as f:
-            city_geojson = json.load(f)
-
-        # --- Dropdown at the top (controls everything) ---
-        selected_city = st.selectbox(
-            "Select a city to view climate data:",
-            city_list,
-            key="city_select"
-        )
-
-        # --- Map creation (purely for display, not interactive for selection) ---
-        city_map = folium.Map(location=[-38.4161, -63.6167], zoom_start=3.4)
-        for feature in city_geojson["features"]:
-            city_name = feature["properties"]["name"]
-            gj = folium.GeoJson(
-                data=feature,
-                name=city_name,
-                style_function=lambda f: {
-                    'fillColor': '#9d9bc9',
-                    'color': 'white',
-                    'weight': 1,
-                    'dashArray': '5, 5',
-                    'fillOpacity': 0.7
-                },
-                highlight_function=lambda f: {
-                    'fillColor': '#003366',
-                    'color': 'white',
-                    'weight': 2,
-                    'fillOpacity': 0.9
-                },
-                tooltip=folium.GeoJsonTooltip(fields=['name'], aliases=['Ciudad:'])
-            )
-            gj.add_child(folium.features.GeoJsonPopup(fields=["name"]))
-            gj.add_to(city_map)
-
-        left_col, right_col = st.columns([1,2])
+        left_col, right_col = st.columns([4,5])
         with left_col:
-            st_folium(city_map, width=450, height=480, use_container_width=True)
+            def get_station_df():
+                conn = psycopg2.connect(**DB_CONFIG)
+                query = """
+                    SELECT station_id, uid, station, province, latitude, longitude, altitude
+                    FROM stations
+                """
+                df = pd.read_sql_query(query, conn)
+                conn.close()
+                return df
 
-        def get_engine():
-            password = urllib.parse.quote_plus(DB_CONFIG['password'])
-            url = (
-                f"postgresql+psycopg2://{DB_CONFIG['user']}:{password}"
-                f"@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['dbname']}"
-            )
-            return create_engine(url)
+            station_df = get_station_df()
 
-        engine = get_engine()
+            # --- Province selection dropdown ---
+            province_list = sorted(station_df["province"].dropna().unique())
+            selected_province = st.selectbox("Filter stations by province:", ["All"] + province_list, key="province_select")
 
-        # --- Fetch climate data ---
-        query_climate = """
-            SELECT month, min_temp_c, max_temp_c, rainfall
-            FROM climate_months
-            WHERE city_name = %s
-            ORDER BY month
-        """
-        df_climate = pd.read_sql_query(query_climate, engine, params=(selected_city,))
-
-
-        # --- Fetch forecast data ---
-        query_forecast = """
-            SELECT *
-            FROM forecast_days
-            WHERE city_name = %s
-            ORDER BY "forecastdate"
-            LIMIT 6
-        """
-        df_forecast = pd.read_sql_query(query_forecast, engine, params=(selected_city,))
-
-        # --- Icon map for weather types ---
-        icon_map = {
-            'Showers': '🌧️', 'Partly Cloudy': '⛅', 'Mostly Cloudy': '☁️', 'Sunny': '☀️',
-            'Cloudy': '☁️', 'Rain': '🌧️', 'Thunderstorms': '⛈️', 'Thundershowers': '⛈️',
-            'Sleet': '🌧️❄️', 'Snow': '❄️', 'Light Rain': '🌦️', 'Sunny Periods': '🌥️',
-            'Fine': '🌞', 'Mist': '🌫️', 'Storm': '⛈️'
-        }
-
-        # --- Visualization ---
-        with right_col:
-            if df_climate.empty:
-                st.warning("No data available for the selected city.")
+            # --- Filter DataFrame and set map center/zoom ---
+            if selected_province == "All":
+                filtered_df = station_df
+                map_center = [-38.4161, -63.6167]  # Center of Argentina
+                zoom_level = 4
             else:
-                # --- Monthly Climate Overview ---
-                months = df_climate['month'].astype(int).apply(lambda x: pd.to_datetime(str(x), format='%m').strftime('%b'))
-                min_temp = np.round(df_climate['min_temp_c'], 2)
-                max_temp = np.round(df_climate['max_temp_c'], 2)
-                rainfall = np.round(df_climate['rainfall'], 2)
-
-                st.markdown('<p class="forecast-summary-header">📊 Monthly Climate Overview</p>', unsafe_allow_html=True)
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=months, y=min_temp, name='Min Temp (°C)', mode='lines+markers',
-                    marker=dict(symbol='circle', size=8), line=dict(color='blue')
-                ))
-                fig.add_trace(go.Scatter(
-                    x=months, y=max_temp, name='Max Temp (°C)', mode='lines+markers',
-                    marker=dict(symbol='circle', size=8), line=dict(color='orange')
-                ))
-                fig.add_trace(go.Bar(
-                    x=months, y=rainfall, name='Rainfall (mm)', yaxis='y2',
-                    marker=dict(color='rgba(30, 144, 255, 0.3)')
-                ))
-                fig.update_xaxes(
-                    showspikes=False, color='black',
-                    title_font=dict(color='black'), tickfont=dict(color='black')
-                )
-                fig.update_yaxes(
-                    showspikes=False, color='black',
-                    title_font=dict(color='black'), tickfont=dict(color='black')
-                )
-                fig.update_layout(
-                    xaxis=dict(title='Month'),
-                    yaxis=dict(title='Temperature (°C)'),
-                    yaxis2=dict(title='Rainfall (mm)', overlaying='y', side='right'),
-                    legend=dict(x=1.09, y=1, bordercolor='Black', borderwidth=1),
-                    bargap=0.2,
-                    height=500,
-                    margin=dict(l=60, r=60, t=40, b=40),
-                    hovermode='x unified'
-                )
-                st.plotly_chart(fig, use_container_width=True)
-
-                # --- Forecast (Next 3 Months) ---
-                query_actual = """
-                    SELECT month, year, min_temp_c, max_temp_c, rainfall
-                    FROM climate_months
-                    WHERE city_name = %s AND is_forecast = FALSE
-                    ORDER BY year, month
-                """
-                df_actual = pd.read_sql_query(query_actual, engine, params=(selected_city,))
-
-                query_forecast = """
-                    SELECT month, year, min_temp_c, max_temp_c, rainfall
-                    FROM climate_months_forecast
-                    WHERE city_name = %s
-                    ORDER BY year, month
-                """
-                df_forecast = pd.read_sql_query(query_forecast, engine, params=(selected_city,))
-
-                if not df_actual.empty:
-                    # Prepare actuals
-                    months_actual = df_actual['month'].astype(int)
-                    min_temp_actual = df_actual['min_temp_c'].astype(float)
-                    max_temp_actual = df_actual['max_temp_c'].astype(float)
-                    rainfall_actual = df_actual['rainfall'].astype(float)
-                    year_actual = df_actual['year'].iloc[0]
-
-                    # Prepare forecast
-                    months_forecast = df_forecast['month'].astype(int) if not df_forecast.empty else []
-                    min_temp_forecast = df_forecast['min_temp_c'].astype(float) if not df_forecast.empty else []
-                    max_temp_forecast = df_forecast['max_temp_c'].astype(float) if not df_forecast.empty else []
-                    rainfall_forecast = df_forecast['rainfall'].astype(float) if not df_forecast.empty else []
-                    year_forecast = df_forecast['year'].iloc[0] if not df_forecast.empty else year_actual + 1
-
-                    # Build x-axis labels
-                    import pandas as pd
-                    periods_actual = pd.period_range(start=f'{year_actual}-01', periods=len(months_actual), freq='M')
-                    periods_forecast = pd.period_range(start=f'{year_forecast}-01', periods=len(months_forecast), freq='M') if not df_forecast.empty else []
-                    all_periods = list(periods_actual) + list(periods_forecast)
-                    all_month_labels = [p.strftime('%b %Y') for p in all_periods]
-
-                    min_temp_full = list(min_temp_actual) + list(min_temp_forecast)
-                    max_temp_full = list(max_temp_actual) + list(max_temp_forecast)
-                    rainfall_full  = list(rainfall_actual) + list(rainfall_forecast)
-
-                    st.markdown('<p class="forecast-summary-header">📉 Forecast (Next 3 Months)</p>', unsafe_allow_html=True)
-                    fig2 = go.Figure()
-                    # Actuals
-                    fig2.add_trace(go.Scatter(
-                        x=all_month_labels[:len(months_actual)], y=min_temp_full[:len(months_actual)], name='Min Temp (°C)',
-                        mode='lines+markers', marker=dict(symbol='circle', size=8), line=dict(color='blue')
-                    ))
-                    fig2.add_trace(go.Scatter(
-                        x=all_month_labels[:len(months_actual)], y=max_temp_full[:len(months_actual)], name='Max Temp (°C)',
-                        mode='lines+markers', marker=dict(symbol='circle', size=8), line=dict(color='orange')
-                    ))
-                    fig2.add_trace(go.Bar(
-                        x=all_month_labels[:len(months_actual)], y=rainfall_full[:len(months_actual)], name='Rainfall - Actual',
-                        yaxis='y2', marker=dict(color='rgba(242, 5, 13, 0.3)')
-                    ))
-                    # Forecasts (if available)
-                    if not df_forecast.empty:
-                        fig2.add_trace(go.Scatter(
-                            x=all_month_labels[len(months_actual):], y=min_temp_full[len(months_actual):], name='Min Temp - Forecast',
-                            mode='lines+markers', line=dict(dash='dash', color='green'), marker=dict(symbol='square', size=7)
-                        ))
-                        fig2.add_trace(go.Scatter(
-                            x=all_month_labels[len(months_actual):], y=max_temp_full[len(months_actual):], name='Max Temp - Forecast',
-                            mode='lines+markers', line=dict(dash='dash', color='red'), marker=dict(symbol='square', size=7)
-                        ))
-                        fig2.add_trace(go.Bar(
-                            x=all_month_labels[len(months_actual):], y=rainfall_full[len(months_actual):], name='Rainfall - Forecast',
-                            yaxis='y2', marker=dict(color='rgba(0, 128, 0, 0.3)')
-                        ))
-
-                    fig2.update_layout(
-                        xaxis=dict(title='Month'),
-                        yaxis=dict(title='Temperature (°C)'),
-                        yaxis2=dict(title='Rainfall (mm)', overlaying='y', side='right'),
-                        legend=dict(x=1.09, y=1, bordercolor='Black', borderwidth=1),
-                        bargap=0.2,
-                        height=500,
-                        margin=dict(l=60, r=60, t=40, b=40),
-                        hovermode='x unified'
-                    )
-                    fig2.update_xaxes(
-                        showspikes=False, color='black',
-                        title_font=dict(color='black'), tickfont=dict(color='black')
-                    )
-                    fig2.update_yaxes(
-                        showspikes=False, color='black',
-                        title_font=dict(color='black'), tickfont=dict(color='black')
-                    )
-                    st.plotly_chart(fig2, use_container_width=True)
+                filtered_df = station_df[station_df["province"] == selected_province]
+                # If there are stations, center on their mean location, else fallback to default
+                if not filtered_df.empty:
+                    map_center = [
+                        filtered_df["latitude"].mean(),
+                        filtered_df["longitude"].mean()
+                    ]
+                    zoom_level = 5  # More zoomed-in for province
                 else:
-                    st.warning("No climate data available for the selected city.")
+                    map_center = [-38.4161, -63.6167]
+                    zoom_level = 4
+
+            # --- Create Folium map and add filtered station markers ---
+            m = folium.Map(location=map_center, zoom_start=zoom_level)
+            for _, row in filtered_df.iterrows():
+                folium.Marker(
+                    location=[row['latitude'], row['longitude']],
+                    tooltip=f"{row['station']} ({row['station_id']})",
+                    icon=folium.Icon(color="blue", icon="info-sign")
+                ).add_to(m)
+
+            st_map = st_folium(m, width=450, height=480, use_container_width=True)
+            
+        with right_col:
+            st.write("")
+            st.write("")
+            # --- AUTHENTICATE AND FETCH STATION DATA ---
+            auth_url = "https://api-test.smn.gob.ar/v1/api-token/auth"
+            auth_data = {
+                "username": "cruzroja",
+                "password": "TCpqNb7b"
+            }
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json"
+            }
+            auth_response = requests.post(auth_url, headers=headers, json=auth_data)
+
+            # --- GET CLICKED STATION ID ---
+            clicked_station_id = None
+            if st_map and st_map.get("last_object_clicked"):
+                lat = st_map["last_object_clicked"]["lat"]
+                lng = st_map["last_object_clicked"]["lng"]
+                tolerance = 1e-5
+                match = station_df[
+                    (abs(station_df["latitude"] - lat) < tolerance) &
+                    (abs(station_df["longitude"] - lng) < tolerance)
+                ]
+                if not match.empty:
+                    clicked_station_id = str(int(match.iloc[0]["station_id"])).strip()
+
+            # --- SHOW STATION WEATHER CARD ---
+            if auth_response.status_code == 200 and clicked_station_id:
+                token = auth_response.json().get("token", "").strip()
+                stations_url = f"https://api-test.smn.gob.ar/v1/weather/station/{clicked_station_id}"
+                headers_with_auth = {
+                    "Authorization": f"JWT {token}",
+                    "Accept": "application/json"
+                }
+                stations_response = requests.get(stations_url, headers=headers_with_auth)
+                if stations_response.status_code == 200:
+                    stations_data = stations_response.json()
+                    # Get the weather icon if available
+                    weather_desc = stations_data['weather'].get('description', '')
+
+                    # Format the date
+                    from datetime import datetime
+                    try:
+                        date_obj = datetime.fromisoformat(stations_data['date'])
+                        date_str = date_obj.strftime('%A, %d %b %Y, %I:%M %p')
+                    except Exception:
+                        date_str = stations_data['date']
+
+                    # Card UI
+                    st.markdown(
+                        f"""
+                        <div style="
+                            background: #b9d9fa; 
+                            border-radius: 16px; 
+                            padding: 10px 10px; 
+                            width: 100%; 
+                            max-width: 100vw;
+                            margin: 0 auto;
+                            display: flex; 
+                            flex-direction: column;
+                            gap: 10px;
+                        ">
+                            <!-- First row: weather_desc and date_str -->
+                            <div style="display: flex; flex-direction: row; gap: 22px; align-items: center;">
+                                <div style="font-size: 1em; font-weight: bold;">{weather_desc}</div>
+                                <div style="color: #000305; font-size: 1em;">{date_str}</div>
+                            </div>
+                            <!-- Second row: all other details -->
+                            <div style="display: flex; flex-direction: row; gap: 22px; flex-wrap: wrap;">
+                                <div><b>Temperature:</b> {stations_data['temperature']}°C</div>
+                                <div><b>Humidity:</b> {stations_data['humidity']}%</div>
+                                <div><b>Pressure:</b> {stations_data['pressure']} hPa</div>
+                                <div><b>Visibility:</b> {stations_data['visibility']} km</div>
+                                <div><b>Wind:</b> {stations_data['wind']['speed']} km/h {stations_data['wind']['direction']} ({stations_data['wind']['deg']}°)</div>
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+                else:
+                    st.info("Failed to fetch station weather data.")
+            elif not clicked_station_id:
+                st.info("Click on a station marker to view its climate data.")
+            else:
+                st.info("Failed to authenticate for station data.")
+
+            # --- CLIMATE DATA PLOT ---
+            def get_climate_data(station_id):
+                conn = psycopg2.connect(**DB_CONFIG)
+                query = """
+                    SELECT month, max_temp, min_temp, avg_pressure
+                    FROM climate_months
+                    WHERE station = %s
+                    ORDER BY id
+                """
+                df = pd.read_sql_query(query, conn, params=(station_id,))
+                conn.close()
+                return df
+
+            if clicked_station_id:
+                climate_df = get_climate_data(clicked_station_id)
+                if not climate_df.empty:
+                    fig = go.Figure()
+
+                    # max_temp
+                    fig.add_trace(go.Scatter(
+                        x=climate_df["month"],
+                        y=climate_df["max_temp"],
+                        mode="lines+markers",
+                        name="Max Temp",
+                        line=dict(color="red"),
+                        marker=dict(symbol="circle", size=8, color="red"),
+                        yaxis="y1"
+                    ))
+
+                    # min_temp
+                    fig.add_trace(go.Scatter(
+                        x=climate_df["month"],
+                        y=climate_df["min_temp"],
+                        mode="lines+markers",
+                        name="Min Temp",
+                        line=dict(color="orange"),
+                        marker=dict(symbol="circle", size=8, color="orange"),
+                        yaxis="y1"
+                    ))
+
+                    # avg_pressure
+                    fig.add_trace(go.Scatter(
+                        x=climate_df["month"],
+                        y=climate_df["avg_pressure"],
+                        mode="lines+markers",
+                        name="Avg Pressure",
+                        line=dict(color="grey"),
+                        marker=dict(symbol="circle", size=8, color="grey"),
+                        yaxis="y2"
+                    ))
+
+                    # Layout
+                    fig.update_layout(
+                        title=f"Climate Data for Station {clicked_station_id}",
+                        xaxis=dict(title="Month"),
+                        yaxis=dict(title="Temperature (°C)"),
+                        yaxis2=dict(
+                            title="Pressure (hPa)",
+                            overlaying="y",
+                            side="right"
+                        ),
+                        legend=dict(title="Variable"),
+                        width=700,
+                        height=400,
+                        margin=dict(l=40, r=40, t=60, b=40)
+                    )
+
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("No climate data available for this station.")
+
 
         with left_col:
+            
+            # --- City list ---
+            city_list = ["Bariloche", "Buenos Aires", "Cordoba", "El Calafate", "Iguazu", "Mar del Plata", "Mendoza", "Salta", "Trelew", "Ushuaia"]
+
+            # --- Load city geojson ---
+            with open("complete_map.geojson", "r", encoding="utf-8") as f:
+                city_geojson = json.load(f)
+
+            # --- Dropdown at the top (controls everything) ---
+            selected_city = st.selectbox(
+                "Select a Province to view the Forecast data:",
+                city_list,
+                key="city_select"
+            )
+            
             # --- Weather Forecast Table (6-day card UI) ---
             query = """
                     SELECT *
@@ -515,11 +567,14 @@ with tabs[1]:
                 )
             else:
                 st.warning("No forecast data available for the selected city.")
-        
+    
     with CLI_tabs[1]:
-        st.header("Sea level Dashboard")
+        st.write('Precipitation dashboard')
         
     with CLI_tabs[2]:
+        st.write('Sea Level data')
+        
+    with CLI_tabs[3]:
         st.header("Droughts, Hurricanes and Floods data")
         
         # HYDROLOGICAL PLOTTING CODE
@@ -684,7 +739,7 @@ with tabs[1]:
                 st.plotly_chart(fig, use_container_width=True)
                 
         
-    with CLI_tabs[3]:
+    with CLI_tabs[4]:
         st.header("Wildfires data")
         col1, col2 = st.columns([1,1])
         
@@ -1004,8 +1059,6 @@ with tabs[1]:
             )
 
             st.plotly_chart(fig, use_container_width=True)
-            
-
 
 with tabs[2]:
     st.header("Socio-economic Indicators")
@@ -1920,15 +1973,15 @@ with tabs[5]:
             indicator_df = filtered_df[filtered_df['indicator_name'] == indicator]
             if not indicator_df.empty:
                 color = color_cycle[(i + j) % len(color_cycle)]
-                fig = px.line(
+                fig = px.bar(
                     indicator_df,
                     x="year",
                     y="value",
                     title=indicator.title(),
-                    markers=True,
                     color_discrete_sequence=[color]
                 )
                 cols[j].plotly_chart(fig, use_container_width=True)
+
                 
     st.write('Enviornment')
     indicator_categories = {
