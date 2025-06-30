@@ -24,6 +24,10 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.filterwarnings("ignore")
 import seaborn as sns # type: ignore
 import psycopg2
+import plotly.graph_objects as go
+from sqlalchemy import create_engine, text
+from datetime import timedelta
+import xgboost as xgb
 from pmdarima import auto_arima #type: ignore
 from datetime import datetime
 import pandas as pd
@@ -569,7 +573,160 @@ with tabs[1]:
                 st.warning("No forecast data available for the selected city.")
     
     with CLI_tabs[1]:
-        st.write('Precipitation dashboard')
+        left_col, right_col = st.columns([4,5])
+        def get_station_df():
+            conn = psycopg2.connect(**DB_CONFIG)
+            query = """
+                SELECT province, city, latitude, longitude
+                FROM rainfall_stations
+            """
+            df = pd.read_sql_query(query, conn)
+            conn.close()
+            return df
+
+        @st.cache_data
+        def get_provinces():
+            query = "SELECT DISTINCT province FROM loc_rainfall ORDER BY province"
+            return pd.read_sql(query, get_engine())["province"].tolist()
+
+        @st.cache_data
+        def get_cities(province):
+            query = "SELECT city FROM loc_rainfall WHERE province = %s ORDER BY city"
+            return pd.read_sql(query, get_engine(), params=(province,))["city"].tolist()
+
+        @st.cache_data
+        def get_adm2_pcode(province, city):
+            query = "SELECT adm2_pcode FROM loc_rainfall WHERE province = %s AND city = %s"
+            result = pd.read_sql(query, get_engine(), params=(province, city))
+            return result["adm2_pcode"].iloc[0] if not result.empty else None
+
+        def get_rainfall_data(adm2_pcode):
+            query = "SELECT date, rfh FROM rainfall WHERE adm2_pcode = :code ORDER BY date"
+            df = pd.read_sql(text(query), get_engine(), params={"code": adm2_pcode})
+            df["date"] = pd.to_datetime(df["date"])
+            df["rfh"] = pd.to_numeric(df["rfh"], errors="coerce").ffill()
+            df.reset_index(drop=True, inplace=True)
+            return df
+
+        def create_lag_features(df, n_lags=5):
+            lagged = df.copy()
+            for i in range(1, n_lags + 1):
+                lagged[f"lag_{i}"] = lagged["rfh"].shift(i)
+            return lagged.dropna().reset_index(drop=True)
+        
+        with left_col:
+
+            station_df = get_station_df()
+            province_list = sorted(station_df["province"].dropna().unique())
+
+            # --- Session state for province ---
+            if "selected_province" not in st.session_state:
+                st.session_state.selected_province = province_list[0] if province_list else None
+
+            selected_province = st.selectbox(
+                "Filter stations by province:",
+                province_list,
+                index=province_list.index(st.session_state.selected_province) if st.session_state.selected_province in province_list else 0,
+                key="rainfall_province_select"
+            )
+            st.session_state.selected_province = selected_province
+
+            # Filter DataFrame but keep map center/zoom fixed
+            filtered_df = station_df[station_df["province"] == selected_province]
+            map_center = [-38.4161, -63.6167]  # Fixed center
+            zoom_level = 4  # Fixed zoom
+
+            m = folium.Map(location=map_center, zoom_start=zoom_level)
+            for _, row in filtered_df.iterrows():
+                folium.Marker(
+                    location=[row['latitude'], row['longitude']],
+                    tooltip=f"{row['province']} - {row['city']}",
+                    icon=folium.Icon(color="blue", icon="info-sign")
+                ).add_to(m)
+
+            st_folium(m, width=450, height=480, use_container_width=True)
+
+        with right_col:
+
+            # Province comes from left_col/session_state
+            province = st.session_state.selected_province
+
+            # --- Session state for city ---
+            cities = get_cities(province)
+            if cities:
+                if "selected_city" not in st.session_state or st.session_state.selected_city not in cities:
+                    st.session_state.selected_city = cities[0]
+                city = st.selectbox("Select City", cities, index=cities.index(st.session_state.selected_city), key="forecast_city_select")
+                st.session_state.selected_city = city
+            else:
+                city = None
+
+            adm2_pcode = get_adm2_pcode(province, city) if city else None
+
+            if adm2_pcode:
+                df = get_rainfall_data(adm2_pcode)
+
+                if df.shape[0] >= 140:
+                    df_lagged = create_lag_features(df, n_lags=5)
+                    X = df_lagged[[f"lag_{i}" for i in range(1, 6)]]
+                    y = df_lagged["rfh"]
+                    dates = df_lagged["date"]
+
+                    model = xgb.XGBRegressor(n_estimators=100, learning_rate=0.1)
+                    model.fit(X, y)
+                    y_pred = model.predict(X)
+
+                    last_lags = df["rfh"].iloc[-5:].to_list()
+                    future_preds = []
+                    for _ in range(9):
+                        pred = model.predict(np.array(last_lags).reshape(1, -1))[0]
+                        future_preds.append(pred)
+                        last_lags = [pred] + last_lags[:-1]
+
+                    forecast_dates = [df["date"].iloc[-1] + timedelta(days=10 * i) for i in range(1, 10)]
+
+                    # Slice last 135 records for plotting
+                    plot_dates = dates[-20:]
+                    plot_actual = y[-20:]
+                    plot_pred = y_pred[-20:]
+
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(
+                        x=plot_dates, y=plot_actual,
+                        name="Actual", mode="lines+markers",
+                        line=dict(color='#62c0d1', width=2)
+                    ))
+                    fig.add_trace(go.Scatter(
+                        x=plot_dates, y=plot_pred,
+                        name="Predicted", mode="lines+markers",
+                        line=dict(color='#82070d', dash="dash")
+                    ))
+                    fig.add_trace(go.Scatter(
+                        x=forecast_dates, y=future_preds,
+                        name="Forecast", mode="lines+markers",
+                        line=dict(color="orange", dash="dash")
+                    ))
+                    fig.add_trace(go.Scatter(
+                        x=[plot_dates.iloc[-1], forecast_dates[0]],
+                        y=[plot_pred[-1], future_preds[0]],
+                        name="Bridge",
+                        mode="lines",
+                        line=dict(color="orange", dash="dash"),
+                        showlegend=False
+                    ))
+
+                    fig.update_layout(
+                        title=f"Rainfall Forecast for next 3 months - {city}",
+                        xaxis_title="Date", yaxis_title="Rainfall (mm)",
+                        template="plotly_white", legend=dict(x=1, y=0)
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+
+                else:
+                    st.warning("⚠️ Not enough data to train model.")
+            else:
+                st.info("ℹ️ Please select a valid city to proceed.")
+
         
     with CLI_tabs[2]:
         st.write('Sea Level data')
