@@ -49,7 +49,7 @@ packaging==24.2
 pandas==2.2.3
 parso==0.8.4
 patsy==1.0.1
-pillow==11.2.1
+pillow==11.3.0
 plotly==6.1.2
 pmdarima==2.0.4
 prompt_toolkit==3.0.51
