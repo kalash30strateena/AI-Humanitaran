@@ -28,6 +28,7 @@ import plotly.graph_objects as go
 from sqlalchemy import create_engine, text
 from datetime import timedelta
 import xgboost as xgb
+from xgboost import XGBRegressor
 from pmdarima import auto_arima #type: ignore
 from datetime import datetime
 import pandas as pd
@@ -49,7 +50,7 @@ import altair as alt
 import plotly.graph_objects as go
 from datetime import datetime
 import os
-from docx import Document
+from docx import Document # type: ignore 
 from components.logged_header import logged_header # type: ignore
 import urllib.parse
 from sqlalchemy import create_engine # type: ignore
@@ -64,19 +65,25 @@ st.markdown("""
 <style>
 .stTabs:nth-of-type(1) [data-baseweb="tab"] {
     margin-right: 7px !important;
+    padding: 8px 10px !important;
+    border-radius: 20px !important;
+    background: #ffffff !important;
+    color: #1565c0;
     font-size: 20px !important;
-    color: #7a2e2b;
-    background: #f5f5f5 !important;
-    border-radius: 6px 6px 0 0 !important;
-    transition: background 0.2s, color 0.2s;
+    font-weight: 500 !important;
+    transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+    border: none !important;
+    box-shadow: none !important;
+    border-bottom: none !important;
 }
-.stTabs:nth-of-type(1) [data-baseweb="tab"]:hover {
-    background: #e0e0e0 !important;
-    color: #b71c1c !important;
+.stTabs:nth-of-type(1) [data-baseweb="tab"] > div[data-testid="stMarkdownContainer"] > p {
+    font-size: 16px !important;
 }
+/* Active (selected) tab: no underline */
 .stTabs:nth-of-type(1) [data-baseweb="tab"][aria-selected="true"] {
-    background: #827e7e !important;
-    color: #e53935 !important;
+    background: #e6e8eb !important; 
+    color: #fc0004 !important;
     font-weight: bold !important;
 }
 
@@ -157,7 +164,7 @@ st.markdown("""
 
 /* Weather forecast card styling */
 .forecast-card {{
-    background: #62a1c7;
+    background: #b9d9fa;
     color: #fff;
     border-radius: 10px;
     padding: 5px 5px 5px 5px;
@@ -242,6 +249,7 @@ icon_map = {
                 'Sleet': '🌧️❄️', 'Snow': '❄️', 'Light Rain': '🌦️', 'Sunny Periods': '🌥️',
                 'Fine': '🌞', 'Mist': '🌫️', 'Storm': '⛈️'
             }
+
 # --- Climate Indicators Tab ---
 
 with tabs[0]:
@@ -250,43 +258,55 @@ with tabs[0]:
         st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Mapa_Argentina_Tipos_clima_IGN.jpg/500px-Mapa_Argentina_Tipos_clima_IGN.jpg",
         caption="Mapa de los tipos de clima en Argentina", use_container_width=160 )
     with right_col:
-        st.write(" ")
-        docx_path = "docs/country_profile_data.docx"  # Your file path
-        def docx_to_markdown(doc):
-            md_lines = []
+        from pathlib import Path
+        def load_docx(docx_file):
+            doc = Document(docx_file)
+            content = []
             for para in doc.paragraphs:
-                md_para = ""
-                for run in para.runs:
-                    text = run.text.replace('\n', ' ')
-                    if not text:
-                        continue
-                    # Apply formatting
-                    if run.bold:
-                        text = f"**{text}**"
-                    if run.italic:
-                        text = f"*{text}*"
-                    if run.underline:
-                        text = f"__{text}__"
-                    md_para += text
-                md_lines.append(md_para)
-            return "\n".join(md_lines)
+                text = para.text.strip()
+                style = para.style.name
+                if not text:
+                    continue
+                if style in ["Heading 1", "Heading 2", "Heading 3", "Heading 4"]:
+                    content.append((style, text))
+                else:
+                    content.append(("bullet", text))
+            return content
 
-        if os.path.exists(docx_path):
-            doc = Document(docx_path)
-            markdown_content = docx_to_markdown(doc)
-            st.markdown(markdown_content)
-        else:
-            st.error(f"File not found: {docx_path}")        
-        
+        def display_content(content):
+            st.markdown("""
+                <style>
+                .heading1 { color: #1f4e79; font-size: 18px; font-weight: bold; margin-top: 30px;}
+                .heading2 { color: #2e6da4; font-size: 16px; font-weight: bold; margin-top: 24px;}
+                .heading3 { color: #3c8dbc; font-size: 14px; font-weight: 600; margin-top: 18px;}
+                .heading4 { color: #5faee3; font-size: 14px; font-weight: 600; margin-top: 12px;}
+                .custom-bullet { color: #333; font-size: 14px; margin-left: 20px; line-height: 1.6;}
+                </style>
+            """, unsafe_allow_html=True)
+            for style, text in content:
+                if style == "Heading 1":
+                    st.markdown(f'<div class="heading1">{text}</div>', unsafe_allow_html=True)
+                elif style == "Heading 2":
+                    st.markdown(f'<div class="heading2">{text}</div>', unsafe_allow_html=True)
+                elif style == "Heading 3":
+                    st.markdown(f'<div class="heading3">{text}</div>', unsafe_allow_html=True)
+                elif style == "Heading 4":
+                    st.markdown(f'<div class="heading4">{text}</div>', unsafe_allow_html=True)
+                elif style == "bullet":
+                    st.markdown(f'<div class="custom-bullet">• {text}</div>', unsafe_allow_html=True)
+
+        docx_path = Path("docs/country_prof.docx")
+        doc_content = load_docx(docx_path)
+        display_content(doc_content)
+            
 with tabs[1]:
-    st.header("Climate Indicators")
     
     CLI_tabs = st.tabs([
     "Temperature",
     "Precipitation",
-    "Sea Level",
-    "Hurricanes, Droughts and Floods",
-    "Wildfires"])
+    "Droughts and Floods",
+    "Wildfires",
+    "Sea Level"])
     
     with CLI_tabs[0]:
 
@@ -304,29 +324,25 @@ with tabs[1]:
 
             station_df = get_station_df()
 
-            # --- Province selection dropdown ---
             province_list = sorted(station_df["province"].dropna().unique())
             selected_province = st.selectbox("Filter stations by province:", ["All"] + province_list, key="province_select")
 
-            # --- Filter DataFrame and set map center/zoom ---
             if selected_province == "All":
                 filtered_df = station_df
                 map_center = [-38.4161, -63.6167]  # Center of Argentina
                 zoom_level = 4
             else:
                 filtered_df = station_df[station_df["province"] == selected_province]
-                # If there are stations, center on their mean location, else fallback to default
                 if not filtered_df.empty:
                     map_center = [
                         filtered_df["latitude"].mean(),
                         filtered_df["longitude"].mean()
                     ]
-                    zoom_level = 5  # More zoomed-in for province
+                    zoom_level = 5
                 else:
                     map_center = [-38.4161, -63.6167]
                     zoom_level = 4
 
-            # --- Create Folium map and add filtered station markers ---
             m = folium.Map(location=map_center, zoom_start=zoom_level)
             for _, row in filtered_df.iterrows():
                 folium.Marker(
@@ -336,11 +352,13 @@ with tabs[1]:
                 ).add_to(m)
 
             st_map = st_folium(m, width=450, height=480, use_container_width=True)
-            
+
+        # --- Right column: Weather card, climate data plot, and pressure forecast ---
         with right_col:
             st.write("")
             st.write("")
-            # --- AUTHENTICATE AND FETCH STATION DATA ---
+
+            # --- Authenticate for API ---
             auth_url = "https://api-test.smn.gob.ar/v1/api-token/auth"
             auth_data = {
                 "username": "cruzroja",
@@ -352,7 +370,7 @@ with tabs[1]:
             }
             auth_response = requests.post(auth_url, headers=headers, json=auth_data)
 
-            # --- GET CLICKED STATION ID ---
+            # --- Get clicked station ID from map ---
             clicked_station_id = None
             if st_map and st_map.get("last_object_clicked"):
                 lat = st_map["last_object_clicked"]["lat"]
@@ -365,7 +383,7 @@ with tabs[1]:
                 if not match.empty:
                     clicked_station_id = str(int(match.iloc[0]["station_id"])).strip()
 
-            # --- SHOW STATION WEATHER CARD ---
+            # --- Show station weather card ---
             if auth_response.status_code == 200 and clicked_station_id:
                 token = auth_response.json().get("token", "").strip()
                 stations_url = f"https://api-test.smn.gob.ar/v1/weather/station/{clicked_station_id}"
@@ -376,10 +394,8 @@ with tabs[1]:
                 stations_response = requests.get(stations_url, headers=headers_with_auth)
                 if stations_response.status_code == 200:
                     stations_data = stations_response.json()
-                    # Get the weather icon if available
                     weather_desc = stations_data['weather'].get('description', '')
 
-                    # Format the date
                     from datetime import datetime
                     try:
                         date_obj = datetime.fromisoformat(stations_data['date'])
@@ -387,7 +403,6 @@ with tabs[1]:
                     except Exception:
                         date_str = stations_data['date']
 
-                    # Card UI
                     st.markdown(
                         f"""
                         <div style="
@@ -401,12 +416,10 @@ with tabs[1]:
                             flex-direction: column;
                             gap: 10px;
                         ">
-                            <!-- First row: weather_desc and date_str -->
                             <div style="display: flex; flex-direction: row; gap: 22px; align-items: center;">
                                 <div style="font-size: 1em; font-weight: bold;">{weather_desc}</div>
                                 <div style="color: #000305; font-size: 1em;">{date_str}</div>
                             </div>
-                            <!-- Second row: all other details -->
                             <div style="display: flex; flex-direction: row; gap: 22px; flex-wrap: wrap;">
                                 <div><b>Temperature:</b> {stations_data['temperature']}°C</div>
                                 <div><b>Humidity:</b> {stations_data['humidity']}%</div>
@@ -418,21 +431,20 @@ with tabs[1]:
                         """,
                         unsafe_allow_html=True
                     )
-
                 else:
                     st.info("Failed to fetch station weather data.")
             elif not clicked_station_id:
-                st.info("Click on a station marker to view its climate data.")
+                st.info("Click on a station marker to view its climate, temperature and pressure data.")
             else:
                 st.info("Failed to authenticate for station data.")
 
-            # --- CLIMATE DATA PLOT ---
+            # --- Climate data plot ---
             def get_climate_data(station_id):
                 conn = psycopg2.connect(**DB_CONFIG)
                 query = """
                     SELECT month, max_temp, min_temp, avg_pressure
                     FROM climate_months
-                    WHERE station = %s
+                    WHERE station_id = %s
                     ORDER BY id
                 """
                 df = pd.read_sql_query(query, conn, params=(station_id,))
@@ -444,7 +456,6 @@ with tabs[1]:
                 if not climate_df.empty:
                     fig = go.Figure()
 
-                    # max_temp
                     fig.add_trace(go.Scatter(
                         x=climate_df["month"],
                         y=climate_df["max_temp"],
@@ -455,7 +466,6 @@ with tabs[1]:
                         yaxis="y1"
                     ))
 
-                    # min_temp
                     fig.add_trace(go.Scatter(
                         x=climate_df["month"],
                         y=climate_df["min_temp"],
@@ -466,7 +476,6 @@ with tabs[1]:
                         yaxis="y1"
                     ))
 
-                    # avg_pressure
                     fig.add_trace(go.Scatter(
                         x=climate_df["month"],
                         y=climate_df["avg_pressure"],
@@ -477,7 +486,6 @@ with tabs[1]:
                         yaxis="y2"
                     ))
 
-                    # Layout
                     fig.update_layout(
                         title=f"Climate Data for Station {clicked_station_id}",
                         xaxis=dict(title="Month"),
@@ -496,93 +504,260 @@ with tabs[1]:
                     st.plotly_chart(fig, use_container_width=True)
                 else:
                     st.info("No climate data available for this station.")
+                    
+                    
+        
+        # --- MIN-MAX-TEMP INTEGRATION
+        if clicked_station_id is not None:
+            station_id = int(clicked_station_id)
 
+            lags = 7
+            forecast_days = 7
 
-        with left_col:
-            
-            # --- City list ---
-            city_list = ["Bariloche", "Buenos Aires", "Cordoba", "El Calafate", "Iguazu", "Mar del Plata", "Mendoza", "Salta", "Trelew", "Ushuaia"]
-
-            # --- Load city geojson ---
-            with open("complete_map.geojson", "r", encoding="utf-8") as f:
-                city_geojson = json.load(f)
-
-            # --- Dropdown at the top (controls everything) ---
-            selected_city = st.selectbox(
-                "Select a Province to view the Forecast data:",
-                city_list,
-                key="city_select"
-            )
-            
-            # --- Weather Forecast Table (6-day card UI) ---
+            # Fetch data for selected station
             query = """
-                    SELECT *
-                    FROM forecast_days
-                    WHERE city_name = %s
-                    ORDER BY "forecastdate"
-                    LIMIT 6
-                """
+            SELECT date, station_id, max_temp, min_temp
+            FROM temperature
+            WHERE station_id = %s
+            ORDER BY date
+            """
+            df = pd.read_sql(query, engine, params=(station_id,))
+            df['date'] = pd.to_datetime(df['date'])
+            df['max_temp'] = pd.to_numeric(df['max_temp'], errors='coerce')
+            df['min_temp'] = pd.to_numeric(df['min_temp'], errors='coerce')
+            df = df.set_index('date')
+            df.ffill(inplace=True)
 
-            df_forecast = pd.read_sql_query(query, engine, params=(selected_city,))
+            for target_col in ['max_temp', 'min_temp']:
+                # Create lag features
+                df_target = df.copy()
+                for lag in range(1, lags + 1):
+                    df_target[f'lag_{lag}'] = df_target[target_col].shift(lag)
+                df_target = df_target.dropna()
 
-            # --- Clean up types ---
-            if not df_forecast.empty:
-                df_forecast['forecastdate'] = pd.to_datetime(df_forecast['forecastdate'], format='%Y-%m-%d')
-                df_forecast['minTemp'] = pd.to_numeric(df_forecast['minTemp'])
-                df_forecast['maxTemp'] = pd.to_numeric(df_forecast['maxTemp'])
+                lag_cols = [f'lag_{i}' for i in range(1, lags + 1)]
+                X = df_target[lag_cols]
+                y = df_target[target_col]
 
-            # --- Forecast card UI ---
-            if not df_forecast.empty:
-                st.markdown(
-                    f'<div class="forecast-summary-header">Weather forecast of <b>{selected_city}</b> (capital city)</div>',
-                    unsafe_allow_html=True
+                model = XGBRegressor(n_estimators=100)
+                model.fit(X, y)
+                df_target['predicted'] = model.predict(X)
+
+                # Forecast next 7 days
+                last_known = df_target.iloc[-1:].copy()
+                future_preds = []
+                future_dates = []
+                lags_list = last_known[[f'lag_{i}' for i in range(1, lags + 1)]].values.flatten().tolist()
+                lags_list = [last_known[target_col].values[0]] + lags_list[:-1]
+
+                for i in range(forecast_days):
+                    input_arr = np.array(lags_list[-lags:]).reshape(1, -1)
+                    pred = model.predict(input_arr)[0]
+                    next_date = df_target.index[-1] + pd.Timedelta(days=i+1)
+                    future_preds.append(pred)
+                    future_dates.append(next_date)
+                    lags_list.append(pred)
+
+                forecast_df = pd.DataFrame({target_col: future_preds}, index=future_dates)
+
+                # Plot
+                plot_df = df_target[df_target.index >= pd.to_datetime("2025-01-01")]
+
+                if plot_df.empty:
+                    st.warning(f"No data available for {target_col} for Station {station_id} from 2025 onwards.")
+                    continue
+
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=plot_df.index, y=plot_df[target_col], mode='lines+markers', name=f'Actual', line=dict(color='skyblue')
+                ))
+                fig.add_trace(go.Scatter(
+                    x=plot_df.index, y=plot_df['predicted'], mode='lines', name=f'Predicted', line=dict(dash='dash', color='brown')
+                ))
+                fig.add_trace(go.Scatter(
+                    x=forecast_df.index, y=forecast_df[target_col], mode='lines+markers', name=f'Forecast', line=dict(color='orange', dash='dash')
+                ))
+                if not plot_df.empty and not forecast_df.empty:
+                    fig.add_trace(go.Scatter(
+                        x=[plot_df.index[-1], forecast_df.index[0]],
+                        y=[plot_df[target_col].iloc[-1], forecast_df[target_col].iloc[0]],
+                        mode='lines',
+                        line=dict(color='orange', dash='dash'),
+                        showlegend=False
+                    ))
+                fig.update_layout(
+                    title=f"{target_col} 7 day Forecast for {station_id}",
+                    xaxis_title="Date",
+                    yaxis_title=f"{target_col} (°C)",
+                    legend=dict(x=1, y=1, xanchor='right', yanchor='top')
                 )
-                num_cards = len(df_forecast)
-                for i in range(0, num_cards, 2):
-                    cols = st.columns(2)
-                    for j in range(2):
-                        if i + j < num_cards:
-                            row = df_forecast.iloc[i + j]
-                            emoji_icon = icon_map.get(row['weather'], None)
-                            if emoji_icon:
-                                icon_html = emoji_icon
-                            elif pd.notna(row['weatherIcon']) and str(row['weatherIcon']).startswith('http'):
-                                icon_html = f'<img src="{row["weatherIcon"]}" width="38">'
-                            else:
-                                icon_html = "*"
-                            day_name = row['forecastdate'].strftime('%a').upper()
-                            date_str = row['forecastdate'].strftime('%d %b')
-                            with cols[j]:
-                                st.markdown(f"""
-                                <div class="forecast-card">
-                                    <div class="day">{day_name}</div>
-                                    <div class="date">{date_str}</div>
-                                    <div class="icon">{icon_html}</div>
-                                    <div class="desc">{row['wxdesc']}</div>
-                                    <div class="temp">{int(row['minTemp'])}°C | {int(row['maxTemp'])}°C</div>
-                                </div>
-                                """, unsafe_allow_html=True)
-                st.markdown(
-                    '<div class="forecast-summary-subtext">Issued at {} (Local Time) {}</div>'.format(
-                        df_forecast.iloc[0]['forecastdate'].strftime('%I:%M %p'),
-                        df_forecast.iloc[0]['forecastdate'].strftime('%b %d, %Y')
-                    ),
-                    unsafe_allow_html=True
-                )
+                st.plotly_chart(fig, use_container_width=True)
+            
+        else:
+            pass
+        
+        # --- Pressure forecast functions ---
+        @st.cache_data
+        def get_station_list(_engine):
+            query = "SELECT DISTINCT station FROM pressure"
+            df = pd.read_sql(query, _engine)
+            return df['station'].sort_values().tolist()
+
+        def load_station_data(engine, station_id):
+            query = "SELECT date, pressure FROM pressure WHERE station = %s ORDER BY date"
+            df = pd.read_sql(query, engine, params=(station_id,))
+            df['date'] = pd.to_datetime(df['date'])
+            df['pressure'] = pd.to_numeric(df['pressure'], errors='coerce')
+            df = df.set_index('date').ffill().reset_index()
+            return df
+
+        def create_lag_features(df, lags=7):
+            df = df.copy()
+            for lag in range(1, lags + 1):
+                df[f'lag_{lag}'] = df['pressure'].shift(lag)
+            return df.dropna()
+
+        def forecast_pressure(df, lags=7, horizon=15):
+            df_lagged = create_lag_features(df, lags)
+            X = df_lagged.drop(columns=['pressure', 'date'])
+            y = df_lagged['pressure']
+
+            model = XGBRegressor(n_estimators=100)
+            model.fit(X, y)
+            df_lagged['predicted'] = model.predict(X)
+
+            last = df_lagged.iloc[-1:].copy()
+            future_rows = []
+
+            for _ in range(horizon):
+                next_input = last.copy()
+                for lag in range(1, lags + 1):
+                    col = f'lag_{lag}'
+                    next_input[col] = last['pressure'].iloc[-lag] if lag <= len(last) else next_input[col]
+
+                next_pred = model.predict(next_input.drop(columns=['pressure', 'predicted', 'date']))[0]
+                next_date = last['date'].iloc[-1] + timedelta(days=1)
+                future_rows.append({'date': next_date, 'forecast': next_pred})
+                last = pd.concat([last, pd.DataFrame({'date': [next_date], 'pressure': [next_pred]})]).tail(lags)
+
+            forecast_df = pd.DataFrame(future_rows).set_index('date')
+            return df_lagged.set_index('date'), forecast_df
+
+        def plot_forecast(df, forecast_df, station_id):
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=df.index, y=df['pressure'], name='Actual', mode='lines+markers', line=dict(color='#62c0d1', width=2)))
+            fig.add_trace(go.Scatter(x=df.index, y=df['predicted'], name='Predicted', mode='lines', line=dict(color='#82070d', dash="dash")))
+            fig.add_trace(go.Scatter(x=forecast_df.index, y=forecast_df['forecast'], name='Forecast', mode='lines+markers', line=dict(color="orange", dash="dash")))
+            fig.add_trace(go.Scatter(
+                x=[df.index[-1], forecast_df.index[0]],
+                y=[df['pressure'].iloc[-1], forecast_df['forecast'].iloc[0]],
+                mode='lines',
+                line=dict(color="orange", dash="dash"),
+                showlegend=False
+            ))
+            fig.update_layout(title=f"Pressure Forecast for 15 days - {station_id}", xaxis_title='Date', yaxis_title='Pressure (hPa)')
+            return fig
+        
+        # --- Use clicked_station_id for pressure forecast ---
+        if clicked_station_id:
+            df = load_station_data(engine, clicked_station_id)
+            if len(df) < 22:
+                st.warning("Not enough data to forecast.")
             else:
-                st.warning("No forecast data available for the selected city.")
+                hist_df, forecast_df = forecast_pressure(df)
+                # Filter to show only data from 2025 onwards
+                hist_df = hist_df[hist_df.index >= pd.to_datetime("2025-01-01")]
+
+                if hist_df.empty:
+                    hist_df = hist_df.tail(40)
+
+                if hist_df.empty:
+                    st.warning("No data available for this station.")
+                else:
+                    fig = plot_forecast(hist_df, forecast_df, clicked_station_id)
+                    st.plotly_chart(fig, use_container_width=True)
+        else:
+            pass
+        
+        # with left_col:
+            
+        #     # --- City list ---
+        #     city_list = ["Bariloche", "Buenos Aires", "Cordoba", "El Calafate", "Iguazu", "Mar del Plata", "Mendoza", "Salta", "Trelew", "Ushuaia"]
+
+        #     # --- Load city geojson ---
+        #     with open("complete_map.geojson", "r", encoding="utf-8") as f:
+        #         city_geojson = json.load(f)
+
+        #     # --- Dropdown at the top (controls everything) ---
+        #     selected_city = st.selectbox(
+        #         "Select a Province to view the Forecast data:",
+        #         city_list,
+        #         key="city_select"
+        #     )
+            
+        #     # --- Weather Forecast Table (6-day card UI) ---
+        #     query = """
+        #             SELECT *
+        #             FROM forecast_days
+        #             WHERE city_name = %s
+        #             ORDER BY "forecastdate"
+        #             LIMIT 6
+        #         """
+
+        #     df_forecast = pd.read_sql_query(query, engine, params=(selected_city,))
+
+        #     # --- Clean up types ---
+        #     if not df_forecast.empty:
+        #         df_forecast['forecastdate'] = pd.to_datetime(df_forecast['forecastdate'], format='%Y-%m-%d')
+        #         df_forecast['minTemp'] = pd.to_numeric(df_forecast['minTemp'])
+        #         df_forecast['maxTemp'] = pd.to_numeric(df_forecast['maxTemp'])
+
+        #     # --- Forecast card UI ---
+        #     if not df_forecast.empty:
+        #         st.markdown(
+        #             f'<div class="forecast-summary-header">Weather forecast of <b>{selected_city}</b> (capital city)</div>',
+        #             unsafe_allow_html=True
+        #         )
+        #         num_cards = len(df_forecast)
+        #         for i in range(0, num_cards, 2):
+        #             cols = st.columns(2)
+        #             for j in range(2):
+        #                 if i + j < num_cards:
+        #                     row = df_forecast.iloc[i + j]
+        #                     emoji_icon = icon_map.get(row['weather'], None)
+        #                     if emoji_icon:
+        #                         icon_html = emoji_icon
+        #                     elif pd.notna(row['weatherIcon']) and str(row['weatherIcon']).startswith('http'):
+        #                         icon_html = f'<img src="{row["weatherIcon"]}" width="38">'
+        #                     else:
+        #                         icon_html = "*"
+        #                     day_name = row['forecastdate'].strftime('%a').upper()
+        #                     date_str = row['forecastdate'].strftime('%d %b')
+        #                     with cols[j]:
+        #                         st.markdown(f"""
+        #                         <div class="forecast-card">
+        #                             <div class="day">{day_name}</div>
+        #                             <div class="date">{date_str}</div>
+        #                             <div class="icon">{icon_html}</div>
+        #                             <div class="desc">{row['wxdesc']}</div>
+        #                             <div class="temp">{int(row['minTemp'])}°C | {int(row['maxTemp'])}°C</div>
+        #                         </div>
+        #                         """, unsafe_allow_html=True)
+        #         st.markdown(
+        #             '<div class="forecast-summary-subtext">Issued at {} (Local Time) {}</div>'.format(
+        #                 df_forecast.iloc[0]['forecastdate'].strftime('%I:%M %p'),
+        #                 df_forecast.iloc[0]['forecastdate'].strftime('%b %d, %Y')
+        #             ),
+        #             unsafe_allow_html=True
+        #         )
+        #     else:
+        #         st.warning("No forecast data available for the selected city.")
     
     with CLI_tabs[1]:
         left_col, right_col = st.columns([4,5])
         def get_station_df():
-            conn = psycopg2.connect(**DB_CONFIG)
-            query = """
-                SELECT province, city, latitude, longitude
-                FROM rainfall_stations
-            """
-            df = pd.read_sql_query(query, conn)
-            conn.close()
-            return df
+            query = "SELECT province, city, latitude, longitude FROM loc_rainfall"
+            return pd.read_sql(query, get_engine())
 
         @st.cache_data
         def get_provinces():
@@ -613,9 +788,11 @@ with tabs[1]:
             for i in range(1, n_lags + 1):
                 lagged[f"lag_{i}"] = lagged["rfh"].shift(i)
             return lagged.dropna().reset_index(drop=True)
-        
-        with left_col:
 
+        # --- Streamlit UI ---
+        left_col, right_col = st.columns([4,5])
+
+        with left_col:
             station_df = get_station_df()
             province_list = sorted(station_df["province"].dropna().unique())
 
@@ -647,8 +824,6 @@ with tabs[1]:
             st_folium(m, width=450, height=480, use_container_width=True)
 
         with right_col:
-
-            # Province comes from left_col/session_state
             province = st.session_state.selected_province
 
             # --- Session state for city ---
@@ -685,7 +860,7 @@ with tabs[1]:
 
                     forecast_dates = [df["date"].iloc[-1] + timedelta(days=10 * i) for i in range(1, 10)]
 
-                    # Slice last 135 records for plotting
+                    # Slice last 20 records for plotting
                     plot_dates = dates[-20:]
                     plot_actual = y[-20:]
                     plot_pred = y_pred[-20:]
@@ -727,15 +902,9 @@ with tabs[1]:
             else:
                 st.info("ℹ️ Please select a valid city to proceed.")
 
-        
     with CLI_tabs[2]:
-        st.write('Sea Level data')
-        
-    with CLI_tabs[3]:
-        st.header("Droughts, Hurricanes and Floods data")
         
         # HYDROLOGICAL PLOTTING CODE
-        
         @st.cache_data
         def get_hydro_data():
             conn = psycopg2.connect(**DB_CONFIG)
@@ -773,12 +942,11 @@ with tabs[1]:
             return ts, hist_forecast, forecast_series
 
         # --- MAIN APP ---
-        st.title("Hydrological Drought Forecast")
 
         hydro_df = get_hydro_data()
         hydro_cities = hydro_df['hydrological_station_name'].unique()
 
-        hydro_city = st.selectbox("Select a station", hydro_cities, key="hydro_city")
+        hydro_city = st.selectbox("Select a Hydrological station", hydro_cities, key="hydro_city")
 
         if hydro_city:
             ts, hist_forecast, forecast_series = get_hydro_forecast(hydro_city, hydro_df)
@@ -815,88 +983,113 @@ with tabs[1]:
                 st.plotly_chart(fig, use_container_width=True)
         
         # METEROLOGICAL PLOTTING CODE
-    
-        @st.cache_data
-        def get_metero_data():
-            conn = psycopg2.connect(**DB_CONFIG)
-            query = """
-            SELECT meterological_station_name, monthly_date, value_index, historical_forecast
+        LAG_COUNT = 5
+        FORECAST_MONTHS = 3 
+        def get_station_names(engine):
+            query = "SELECT DISTINCT meterological_station_name FROM meterological_droughts ORDER BY meterological_station_name"
+            df = pd.read_sql(query, engine)
+            return df['meterological_station_name'].tolist()
+
+        def get_metero_data(engine, station_name):
+            query = f"""
+            SELECT monthly_date, value_index
             FROM meterological_droughts
-            ORDER BY meterological_station_name, monthly_date
+            WHERE meterological_station_name = '{station_name}'
+            ORDER BY monthly_date
             """
-            df = pd.read_sql(query, conn)
-            conn.close()
-            df['monthly_date'] = pd.to_datetime(df['monthly_date'], format='%d-%m-%Y')
-            return df
+            df = pd.read_sql(query, engine)
+            df['monthly_date'] = pd.to_datetime(df['monthly_date'])
+            df = df.sort_values('monthly_date').set_index('monthly_date')
 
-        @st.cache_data
-        def get_metero_forecast(city, df, forecast_days=2):
-            city_df = df[df['meterological_station_name'] == city].sort_values('monthly_date')
-            ts = city_df.set_index('monthly_date')['value_index'].astype(float)
-            hist_forecast = city_df.set_index('monthly_date')['historical_forecast'].astype(float)
-            if len(ts) < 14:
-                return None, None, None
-            model_arima = auto_arima(
-                ts,
-                start_p=1, start_q=1,
-                max_p=5, max_q=5,
-                d=None,
-                seasonal=False,
-                trace=False,
-                suppress_warnings=True,
-                stepwise=True
-            )
-            forecast = model_arima.predict(n_periods=forecast_days)
-            forecast = np.array(forecast)
-            last_date = ts.index[-1]
-            forecast_dates = [last_date + pd.DateOffset(months=i) for i in range(1, forecast_days + 1)]
-            forecast_series = pd.Series(forecast, index=forecast_dates)
-            return ts, hist_forecast, forecast_series
+            for lag in range(1, LAG_COUNT + 1):
+                df[f'lag_{lag}'] = df['value_index'].shift(lag)
+            return df.dropna()
 
-        # --- MAIN APP ---
-        st.title("Meterological Drought Forecast")
+        def train_and_forecast(df):
+            feature_cols = [f'lag_{i}' for i in range(1, LAG_COUNT + 1)]
+            X, y = df[feature_cols], df['value_index']
 
-        metero_df = get_metero_data()
-        metero_cities = metero_df['meterological_station_name'].unique()
+            model = XGBRegressor()
+            model.fit(X, y)
+            df['fitted'] = model.predict(X)
 
-        metero_city = st.selectbox("Select a station", metero_cities, key="metero_city")
-
-        if metero_city:
-            ts, hist_forecast, forecast_series = get_metero_forecast(metero_city, metero_df)
-            if ts is None:
-                st.warning(f"Not enough data for {metero_city} (need at least 14 records).")
-            else:
-                fig = go.Figure()
-                # Actual data (last year, ~360 days, or adjust as needed)
-                fig.add_trace(go.Scatter(
-                    x=ts.index[-36:], y=ts.values[-36:], mode='lines+markers',
-                    name='Actual Data', line=dict(color='#62c0d1')
-                ))
-                # Historical forecasts (all available)
-                fig.add_trace(go.Scatter(
-                    x=hist_forecast.index,
-                    y=hist_forecast.values,
-                    mode='lines',
-                    name='Historical Forecasts',
-                    line=dict(color='#82070d', width=1, dash='dash')
-                ))
-
-                # 3-month forecast
-                fig.add_trace(go.Scatter(
-                    x=forecast_series.index, y=forecast_series, mode='lines+markers',
-                    name='2-Month Forecast', line=dict(color='orange', dash='dash')
-                ))
-                fig.update_layout(
-                    title=f'Forecast for {metero_city}',
-                    xaxis_title='Date',
-                    yaxis_title='Drought Index Value',
-                    legend=dict(x=1, y=0.5),
-                    template='plotly_white'
-                )
-                st.plotly_chart(fig, use_container_width=True)
+            lags = df['value_index'].iloc[-LAG_COUNT:].tolist()
+            
+            last_actual_date = df.index[-1]
+            future_dates = []
+            for i in range(1, FORECAST_MONTHS + 1):
+                next_month = (last_actual_date + DateOffset(months=i)).replace(day=15)
+                future_dates.append(next_month)
                 
+            future_forecast = []
+            for _ in range(FORECAST_MONTHS):
+                input_arr = np.array(lags[-LAG_COUNT:]).reshape(1, -1)
+                pred = model.predict(input_arr)[0]
+                future_forecast.append(pred)
+                lags.append(pred)
+
+            forecast_df = pd.DataFrame({
+                'monthly_date': future_dates,
+                'value_index': [np.nan]*FORECAST_MONTHS,
+                'fitted': [np.nan]*FORECAST_MONTHS,
+                'future_forecast': future_forecast
+            }).set_index('monthly_date')
+
         
-    with CLI_tabs[4]:
+            full_df = pd.concat([df[['value_index', 'fitted']], forecast_df], axis=0)
+
+            return full_df
+
+        def plot_forecasts(full_df, station_name):
+            fig = go.Figure()
+
+            fig.add_trace(go.Scatter(x=full_df.index, y=full_df['value_index'],
+                name="Actual", mode='lines+markers', line=dict(color='skyblue')))
+            fig.add_trace(go.Scatter(x=full_df.index,y=full_df['fitted'],
+                name="Predicted",mode='lines+markers',line=dict(dash='dash', color='brown')))
+        
+            forecast_only = full_df[~full_df['future_forecast'].isna()]
+            fig.add_trace(go.Scatter(
+                x=forecast_only.index,
+                y=forecast_only['future_forecast'],
+                name="Forecast (Next 3 Months)",
+                mode='lines+markers',
+                line=dict(dash='dot', color='orange')
+            ))
+            if not forecast_only.empty:
+                last_actual_date = full_df['value_index'].last_valid_index()
+                last_actual_value = full_df.loc[last_actual_date, 'value_index']
+
+                first_forecast_date = forecast_only.index[0]
+                first_forecast_value = forecast_only.iloc[0]['future_forecast']
+
+                fig.add_trace(go.Scatter(x=[last_actual_date, first_forecast_date],y=[last_actual_value, first_forecast_value],
+                    mode='lines',line=dict(dash='dot', color='orange'),showlegend=False ))
+
+            fig.update_layout(
+                title=f"Value Index Forecast for {station_name}",
+                xaxis_title="Date",
+                yaxis_title="Value Index",
+                template='plotly_white',
+                width=600,height=500
+            )
+            return fig
+
+        engine = get_engine()
+        stations = get_station_names(engine, )
+        station_name = st.selectbox("Select a Meteorological Station:", stations)
+
+        if station_name:
+            df = get_metero_data(engine, station_name)
+            if df.empty:
+                st.warning("No data available for the selected station.")
+            else:
+                full_df = train_and_forecast(df)
+                fig = plot_forecasts(full_df, station_name)
+
+                st.plotly_chart(fig, use_container_width=True)
+        
+    with CLI_tabs[3]:
         st.header("Wildfires data")
         col1, col2 = st.columns([1,1])
         
@@ -1218,7 +1411,6 @@ with tabs[1]:
             st.plotly_chart(fig, use_container_width=True)
 
 with tabs[2]:
-    st.header("Socio-economic Indicators")
     st.write("Information on demographics, economics, and social factors.")
     
     SE_tabs = st.tabs([
@@ -1404,7 +1596,6 @@ with tabs[2]:
         
 
 with tabs[3]:
-    st.header("Vulnerability Indicators")    
     VI_tabs = st.tabs([
     "Age",
     "Gender",
